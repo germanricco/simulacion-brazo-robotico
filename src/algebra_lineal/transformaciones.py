@@ -32,21 +32,23 @@ def rot_z(theta):
         [0, 0, 1]
     ])
 
-def matriz_dh(theta, d, a, alpha):
+def matriz_dh(a, alpha, d, theta):
     """
     Calcula la matriz de transformación homogénea usando los parámetros de Denavit-Hartenberg (DH).
 
-    theta: Ángulo de rotación (rad)
-    d: Desplazamiento a lo largo de z
     a: Longitud del enlace
-    alpha: Ángulo de inclinación
+    alpha: Ángulo de torsion (rad)
+    d: Desplazamiento a lo largo del eje z
+    theta: Ángulo de rotación de la articulación (rad)
+    
     """
-    return np.array([
+    matriz_homogenea = np.array([
         [np.cos(theta), -np.sin(theta) * np.cos(alpha), np.sin(theta) * np.sin(alpha), a * np.cos(theta)],
         [np.sin(theta), np.cos(theta) * np.cos(alpha), -np.cos(theta) * np.sin(alpha), a * np.sin(theta)],
         [0, np.sin(alpha), np.cos(alpha), d],
         [0, 0, 0, 1]
     ])
+    return np.round(matriz_homogenea, decimals=12)
 
 # Prueba de la funcion al ejecutar script
 if __name__ == "__main__":
