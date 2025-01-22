@@ -4,19 +4,19 @@ import sys
 from pathlib import Path
 
 # Obtener el directorio raíz del proyecto
-project_root = Path(__file__).resolve().parent.parent
+project_root = Path(__file__).resolve().parent.parent.parent
 print(f"Project Root: {project_root}")
 
 # Agregar la ruta relativa al sys.path
 algebra_path = project_root / "src" / "algebra_lineal"
 sys.path.append(str(algebra_path))
-print(f"Ruta Agregada:", algebra_path)
-print("Contenido de la carpeta:", list(algebra_path.glob("*.py")))
+#print(f"Ruta Agregada:", algebra_path)
+#print("Contenido de la carpeta:", list(algebra_path.glob("*.py")))
 
 # Intentar importar el módulo
 try:
     import transformaciones
-    print("Modulo importado con exito")
+    print("Modulo transformaciones importado con exito")
 except ModuleNotFoundError:
     print("Error: No se pudo importar el modulo 'transformaciones'")
 
@@ -27,7 +27,7 @@ def calcular_posiciones(matriz_dh_params):
     Parámetros:
         matriz_dh_params: Matriz numpy de tamaño (n, 4) con los parámetros DH (a, alpha, d, theta)
     Retorna:
-        Matriz numpy con las posiciones x, y, z de las articulaciones
+        Matriz numpy con las posiciones x, y, z de las articulaciones y la matriz de orientación final
     """
     # Punto inicial (base del brazo) en coordenadas homogéneas
     puntos_homogeneos = np.array([[0, 0, 0, 1]])  # Base en el origen
@@ -46,8 +46,11 @@ def calcular_posiciones(matriz_dh_params):
         # Stackeo matriz en forma vertical, agregando la nueva posición
         puntos_homogeneos = np.vstack((puntos_homogeneos, nueva_posicion))
 
+    # Obtengo la matriz de rotación de la ultima matriz homogenea (Orientación final del TCP)
+    orientacion_tcp = T[:3, :3]
+
     # Transponer la matriz de puntos para devolver las coordenadas en columnas [x, y, z]
-    return puntos_homogeneos[:, :3].T
+    return puntos_homogeneos[:, :3].T, orientacion_tcp # Devuelve las posiciones y la matriz de orientación final
 
 
 if __name__ == "__main__":
@@ -57,5 +60,9 @@ if __name__ == "__main__":
         [1, 0, 0, np.radians(0)],
         [1, 0, 0, np.radians(0)]
     ])
+
+    posiciones, orientacion_tcp = calcular_posiciones(matriz_dh_params)
     print("Coordenadas: X en fila 0, Y en fila 1, Z en fila 2")
-    print(calcular_posiciones(matriz_dh_params))
+    print(posiciones)
+    print("Matriz de orientacion final: ")
+    print(orientacion_tcp)

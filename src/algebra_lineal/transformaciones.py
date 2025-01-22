@@ -2,7 +2,7 @@ import numpy as np
 
 def traslacion_3d(dx, dy, dz):
     """
-    Devuelve una matriz de traslación 3D.
+    Devuelve una matriz homogenea de traslación 3D.
     """
     return np.array([
         [1, 0, 0, dx],

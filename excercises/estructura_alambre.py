@@ -11,15 +11,15 @@ project_root = Path(__file__).resolve().parent.parent
 print(f"Project Root: {project_root}")
 
 # Agregar la ruta relativa al sys.path
-algebra_path = project_root / "src" / "algebra_lineal"
-sys.path.append(str(algebra_path))
-print(f"Ruta Agregada:", algebra_path)
-print("Contenido de la carpeta:", list(algebra_path.glob("*.py")))
+cinematica_path = project_root / "src" / "cinematica"
+sys.path.append(str(cinematica_path))
+print(f"Ruta Agregada:", cinematica_path)
+print("Contenido de la carpeta:", list(cinematica_path.glob("*.py")))
 
 # Intentar importar el módulo
 try:
     import cinematica
-    print("Modulo importado con exito")
+    print("Modulo cinematica importado con exito")
 except ModuleNotFoundError:
     print("Error: No se pudo importar el modulo 'cinematica' ")
 
