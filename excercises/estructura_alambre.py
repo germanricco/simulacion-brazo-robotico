@@ -1,3 +1,14 @@
+"""
+Se busca crear la estructura alámbrica de un robot de 4GL utilizando los parámetros de Denavit-Hartenberg
+
+Se resaltan los puntos:
+* GCS (Global Coordinate System)
+* MCS (Machine Coordinate System)
+* Joints (J1, J2, J3, J4)
+* MP (Mounting Point)
+* TCP (Tool Center Point)
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
@@ -10,39 +21,44 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 print(f"Project Root: {project_root}")
 
-# Agregar la ruta relativa al sys.path
+# Agregar rutas relativas
 cinematica_path = project_root / "src" / "cinematica"
 sys.path.append(str(cinematica_path))
+
+algebra_lineal_path = project_root / "src" / "algebra_lineal"
+sys.path.append(str(algebra_lineal_path))
 
 # Intentar importar el módulo
 try:
     import cinematica
+    import orientacion
     print("Modulo cinematica importado con exito")
+    print("Modulo algebra_lineal importado con exito")
 except ModuleNotFoundError:
-    print("Error: No se pudo importar el modulo 'cinematica' ")
+    print("Error: No se pudieron importar los modulos ")
 
 # Matriz de parametros geométricos y posición inicial
 matriz_dh_params = np.array([
-        [1, 0, 0, np.radians(0)],        #GCS to MCS
+        [1, 0, 0, np.radians(0)],       #GCS to MCS
         [0, np.pi/2, 0.5, np.radians(0)],  #MCS to J1
-        [1, 0, 0, np.radians(0)],        #J1 to J2
-        [0.8, 0, 0, np.radians(0)],        #J2 to J3
-        [0.4, 0, 0, np.radians(0)]     #J3 to TCP (wrist to end of tool)
+        [1, 0, 0, np.radians(0)],     #J1 to J2
+        [0.8, 0, 0, np.radians(0)],      #J2 to J3
+        [0.4, 0, 0, np.radians(0)]       #J3 to TCP (wrist to end of tool)
     ])
 
 # Función de actualización de la visualización con sliders
 def actualizar(val):
-    # Actualizar ángulos theta con slider (4 gdl)
+    # Actualizar los angulos deseados (4 gdl)
     matriz_dh_params[1, 3] = np.radians(slider_theta1.val)
     matriz_dh_params[2, 3] = np.radians(slider_theta2.val)
     matriz_dh_params[3, 3] = np.radians(slider_theta3.val)
     matriz_dh_params[4, 3] = np.radians(slider_theta4.val)
 
     # Obtener posicion y orientacion
-    posiciones, R_tcp  = cinematica.cinematica_directa(matriz_dh_params)
+    posiciones, R_tcp  = cinematica.cinematica_directa_dh(matriz_dh_params)
 
     # Convertir orientacion en angulos de euler
-    angulos_euler= cinematica.calcular_angulos_euler(R_tcp)
+    angulos_euler= orientacion.Euler.matriz_a_euler(R_tcp)
 
     #Conviertir angulos de euler de rad2deg
     angulos_euler_deg = []
@@ -81,7 +97,7 @@ ax.set_ylim([-2, 4])
 ax.set_zlim([-0, 5])
 
 # Visualización inicial
-posiciones, R_tcp = cinematica.cinematica_directa(matriz_dh_params)
+posiciones, R_tcp = cinematica.cinematica_directa_dh(matriz_dh_params)
 
 ax.scatter(posiciones[0,0], posiciones[0,1], posiciones[0,2], color='green', s=100) 
 ax.plot(posiciones[1:,0], posiciones[1:,1], posiciones[1:,2], 'bo-', linewidth=2)
