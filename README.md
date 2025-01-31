@@ -20,5 +20,4 @@ Instalación:
 pip install -r requirements.txt
 ```
 
-## URDF Models
-https://github.com/c-yiting/pybullet-URDF-models/tree/main
+## Licencia
