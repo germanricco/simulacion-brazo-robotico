@@ -74,6 +74,6 @@ if __name__ == "__main__":
     z_data = tiempo / 2  # Movimiento en altura
     
     #animacion_trayectoria_2D(x_data, y_data, tiempo)
-
+    
     animacion_trayectoria_3D(x_data, y_data, z_data, tiempo)
     
