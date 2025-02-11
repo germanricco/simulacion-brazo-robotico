@@ -1,3 +1,9 @@
+"""
+Modulo para cinematica de un Brazo Robotico
+
+Bibliografia: "Industrial Robotic Control - Fabrizio Frigeni"
+"""
+
 import numpy as np
 import sys
 from pathlib import Path
@@ -22,12 +28,10 @@ def cinematica_directa_dh(matriz_dh_params):
     Calcula las posiciones de las articulaciones utilizando parámetros DH.
 
     Parámetros:
-        matriz_dh_params: Matriz numpy de tamaño (n, 4) con los parámetros DH (a, alpha, d, theta)
-
-        siendo n la cantidad de articulaciones o puntos de interes
+        * matriz_dh_params: Matriz numpy de tamaño (n, 4) con los parámetros DH (a, alpha, d, theta)
 
     Retorna:
-        Matriz numpy con las posiciones x, y, z de las articulaciones y la matriz de orientación final
+        * Matriz numpy con las posiciones x, y, z de las articulaciones y la matriz de orientación final
     """
     # Punto inicial (base del brazo) en coordenadas homogéneas
     puntos_homogeneos = np.array([[0, 0, 0, 1]])  # Base en el origen
@@ -110,12 +114,12 @@ def cinematica_inversa(posicion_deseada_tcp, orientacion_deseada_tcp, parametros
     Calcula los ángulos de las articulaciones para alcanzar una posición y orientación deseada.
     
     Parámetros:
-    - posicion_deseada: np.array([x, y, z]), posición deseada de TCP en coordenadas cartesianas.
-    - orientacion_deseada: np.array([roll, pitch, yaw]), orientación deseada del TCP en ángulos de Euler.
-    - parametros_geometricos (np.array): Matriz con los parámetros geométricos del robot (a1x, a1y, a1z, ..., a4x, a4y, a4z).
+        * posicion_deseada: np.array([x, y, z]), posición deseada de TCP en coordenadas cartesianas.
+        * orientacion_deseada: np.array([roll, pitch, yaw]), orientación deseada del TCP en ángulos de Euler.
+        * parametros_geometricos (np.array): Matriz con los parámetros geométricos del robot (a1x, a1y, a1z, ..., a4x, a4y, a4z).
     
     Retorna:
-    - np.array: Ángulos de las articulaciones en radianes.
+        * (np.array): Ángulos de las articulaciones en radianes.
     """
 
     a1 = np.array([parametros_geometricos[0,0], parametros_geometricos[0,1], parametros_geometricos[0,2]])

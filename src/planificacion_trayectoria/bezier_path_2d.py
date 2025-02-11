@@ -137,7 +137,7 @@ def main():
     end_yaw = np.radians(-45.0)  # [rad]
     offset = 3.0
 
-    #! Compute control points and path
+    # Compute control points and path
     path, control_points = calc_4points_bezier_path(
         start_x, start_y, start_yaw, end_x, end_y, end_yaw, offset)
 
