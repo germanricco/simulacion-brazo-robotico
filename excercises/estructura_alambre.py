@@ -31,7 +31,7 @@ sys.path.append(str(algebra_lineal_path))
 # Intentar importar el módulo
 try:
     import cinematica
-    import orientacion
+    import Euler
     print("Modulo cinematica importado con exito")
     print("Modulo algebra_lineal importado con exito")
 except ModuleNotFoundError:
@@ -58,7 +58,7 @@ def actualizar(val):
     posiciones, R_tcp  = cinematica.cinematica_directa_dh(matriz_dh_params)
 
     # Convertir orientacion en angulos de euler
-    angulos_euler= orientacion.Euler.matriz_a_euler(R_tcp)
+    angulos_euler= Euler.Euler.matriz_a_euler(R_tcp)
 
     #Conviertir angulos de euler de rad2deg
     angulos_euler_deg = []

@@ -17,7 +17,7 @@ sys.path.append(str(algebra_path))
 
 try:
     import transformaciones
-    import orientacion
+    import Euler
     import matrices_rotacion
     print("Modulos importados con exito")
 except ModuleNotFoundError:
@@ -133,7 +133,7 @@ def cinematica_inversa(posicion_deseada_tcp, orientacion_deseada_tcp, parametros
     # Las articulaciones superiores (4, 5 y 6) no afectan la posicion del WP
 
     # Obtengo matriz de rotación desde la base hasta el TCP
-    R_tcp = orientacion.Euler.euler_a_matriz(orientacion_deseada_tcp[0], orientacion_deseada_tcp[1], orientacion_deseada_tcp[2])
+    R_tcp = Euler.Euler.euler_a_matriz(orientacion_deseada_tcp[0], orientacion_deseada_tcp[1], orientacion_deseada_tcp[2])
     print("R_tcp: ", R_tcp)
 
     # Extraigo x
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     print("Posiciones:", posiciones)
     print("Matriz de orientacion final: ", orientacion_tcp)
 
-    angulos_euler = orientacion.Euler.matriz_a_euler(orientacion_tcp)
+    angulos_euler = Euler.Euler.matriz_a_euler(orientacion_tcp)
     print(f"Los angulos de Euler (en radianes) son: {angulos_euler}")
     
     #Convierto angulos de euler de rad2deg
@@ -260,7 +260,7 @@ if __name__ == "__main__":
     print("Posicion TCP:", posicion)
     #print("Matriz de Orientacion TCP: \n", orientacion_tcp)
 
-    angulos_euler = orientacion.Euler.matriz_a_euler(orientacion_tcp)
+    angulos_euler = Euler.Euler.matriz_a_euler(orientacion_tcp)
     #print(f"Los angulos de Euler (en radianes) son: {angulos_euler}")
     angulos_euler_deg = np.rad2deg(angulos_euler)
     print(f"Los angulos de Euler (en grados) son: {angulos_euler_deg}")
