@@ -11,8 +11,8 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 print(f"Project Root: {project_root}")
 
-cinematica_path = project_root / "src" / "planificacion_trayectoria"
-sys.path.append(str(cinematica_path))
+planificacion_path = project_root / "src" / "planificacion_trayectoria"
+sys.path.append(str(planificacion_path))
 
 try:
     import bezier_path_2d
@@ -70,6 +70,7 @@ def segmentar_path(path, num_segments):
 def calc_longitud_tramo(path):
     """
     Calcula la longitud de la trayectoria.
+    
 
     Parámetros:
         * path: (numpy array) Trayectoria de puntos [ [x0, y0], [x1, y1], ... ]

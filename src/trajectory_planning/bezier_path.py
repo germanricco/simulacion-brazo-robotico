@@ -51,8 +51,6 @@ class BezierPath:
         else:
             control_point_2 = end_pose - control_point_dist * direccion_vector
 
-        
-
         control_points = np.array(
             [start_pose,
             control_point_1,
@@ -96,7 +94,7 @@ class BezierPath:
 
         # Caso base: si solo hay un punto de control, es el punto en la curva
         if n == 1:
-            print(f"Bezier Return: {control_points[0]}")
+            #?print(f"Bezier Return: {control_points[0]}")
             return control_points[0]
 
         # Paso recursivo: interpolar linealmente los puntos de control adyacentes

@@ -67,27 +67,29 @@ class Cuboid:
         if punto_np.shape != (3,):
             raise ValueError(f"El punto debe ser en R3, pero tiene dimensión: {punto_np.shape}")
 
+        # Verifica si cada coordenada es mayor al min. y menor al max
         return (self.min_point[0] - epsilon <= punto_np[0] <= self.max_point[0] + epsilon and
                 self.min_point[1] - epsilon <= punto_np[1] <= self.max_point[1] + epsilon and
                 self.min_point[2] - epsilon <= punto_np[2] <= self.max_point[2] + epsilon)
     
 
-    def segmento_interseca_cuboide(self, segmento_inicio, segmento_fin, epsilon=1e-6):
+    def segmento_interseca_cuboide(self, inicio_segmento, fin_segmento, epsilon=1e-6):
         """
         Verifica si un segmento de línea interseca el Cuboid usando el algoritmo de Liang-Barsky (adaptado a 3D).
         Complejidad: O(1) (tiempo constante).
         
+        
         Parámetros:
-            * segmento_inicio (array-like): Punto inicial del segmento en R3.
-            * segmento_fin (array-like): Punto final del segmento en R3.
+            * inicio_segmento (array-like): Punto inicial del segmento en R3.
+            * fin_segmento (array-like): Punto final del segmento en R3.
             * epsilon (float): Tolerancia para comparaciones de punto flotante.
 
         Retorna:
             * bool: True si el segmento interseca el Cuboid, False en caso contrario.
         """
         # Convertir a arrays de numpy
-        p0 = np.asarray(segmento_inicio)
-        p1 = np.asarray(segmento_fin)
+        p0 = np.asarray(inicio_segmento)
+        p1 = np.asarray(fin_segmento)
         
         # Validación de dimensiones
         if p0.shape != (3,) or p1.shape != (3,):
@@ -127,8 +129,6 @@ class Cuboid:
         # 3. Verificar si hay solapamiento en el rango [0, 1]
         return t_max >= t_min and t_min <= 1.0 and t_max >= 0.0
         
-
-
 if __name__ == "__main__":
     # Cuboide de ejemplo: [0,0,0] a [5,5,5]
     mi_cuboid = Cuboid(min_point=np.array([0,0,0]), max_point=np.array([5,5,5]))
@@ -151,9 +151,3 @@ if __name__ == "__main__":
     assert mi_cuboid.segmento_interseca_cuboide([5,5,5], [6,6,6]) == True  # Punto [5,5,5] está en el límite
 
     assert mi_cuboid.segmento_interseca_cuboide([-2, -2, 0], [2, 2, 0]) == True #Intersecta en ODC
-
-    # Error: min_point no array-like
-    try:
-        cubo_error_tipo_min = Cuboid([0, 0, 0], [0, 0, "a"])
-    except TypeError as e:
-        print(f"Error esperado (TypeError): {e}")

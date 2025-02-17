@@ -104,10 +104,10 @@ def cinematica_directa(angulos_theta, parametros_geometricos):
     """
 
     # Extraer la posición del TCP (última columna de T_total)
-    posicion = np.round(T_total[:3, 3], decimals=1)
-    orientacion = np.round(T_total[:3, :3], decimals=6)
+    posicion_tcp = np.round(T_total[:3, 3], decimals=1)
+    orientacion_tcp = np.round(T_total[:3, :3], decimals=6)
     
-    return posicion, orientacion
+    return posicion_tcp, orientacion_tcp
 
 def cinematica_inversa(posicion_deseada_tcp, orientacion_deseada_tcp, parametros_geometricos):
     """
@@ -256,8 +256,8 @@ if __name__ == "__main__":
     ])
 
     angulos = [np.deg2rad(-46), np.deg2rad(46), np.deg2rad(46), np.deg2rad(46), np.deg2rad(46), np.deg2rad(46)]
-    posicion, orientacion_tcp = cinematica_directa(angulos, parametros_geometricos)
-    print("Posicion TCP:", posicion)
+    posicion_tcp, orientacion_tcp = cinematica_directa(angulos, parametros_geometricos)
+    print("Posicion TCP:", posicion_tcp)
     #print("Matriz de Orientacion TCP: \n", orientacion_tcp)
 
     angulos_euler = Euler.Euler.matriz_a_euler(orientacion_tcp)
