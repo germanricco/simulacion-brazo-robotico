@@ -8,20 +8,15 @@ import numpy as np
 import sys
 from pathlib import Path
 
-# Obtener el directorio raíz del proyecto
+# Importar Modulos
 project_root = Path(__file__).resolve().parent.parent.parent
-algebra_path = project_root / "src" / "algebra_lineal"
-sys.path.append(str(algebra_path))
+src_path = project_root / "src" 
+sys.path.append(str(src_path))
 
-# Intentar importar el módulo
+from algebra_lineal.euler import Euler
+from algebra_lineal import matrices_rotacion
+from algebra_lineal.transformaciones import TransformacionHomogenea
 
-try:
-    import transformaciones
-    import Euler
-    import matrices_rotacion
-    print("Modulos importados con exito")
-except ModuleNotFoundError:
-    print("Error: No se pudieron importar los modulos")
 
 def cinematica_directa_dh(matriz_dh_params):
     """
@@ -42,7 +37,7 @@ def cinematica_directa_dh(matriz_dh_params):
     # Recorrer los parámetros DH y calcular la posición de cada articulación
     for fila in matriz_dh_params:
         a, alpha, d, theta = fila
-        T_i = transformaciones.TransformacionHomogenea.matriz_dh(a, alpha, d, theta)
+        T_i = TransformacionHomogenea.matriz_dh(a, alpha, d, theta)
         T = np.dot(T, T_i)
 
         # Agregar la posición del extremo (x, y, z, 1) para mantener la dimensión consistente
@@ -81,11 +76,11 @@ def cinematica_directa(angulos_theta, parametros_geometricos):
         #print(f"Fila: {i}, Parametros: {parametros}")
 
         if i == 0:
-            T = transformaciones.TransformacionHomogenea.rotacion_z(theta, parametros[0], parametros[1], parametros[2])
+            T = TransformacionHomogenea.rotacion_z(theta, parametros[0], parametros[1], parametros[2])
         elif (i==1 or i==2 or i==4):
-            T = transformaciones.TransformacionHomogenea.rotacion_y(theta, parametros[0], parametros[1], parametros[2])
+            T = TransformacionHomogenea.rotacion_y(theta, parametros[0], parametros[1], parametros[2])
         elif (i==3 or i==5):
-            T = transformaciones.TransformacionHomogenea.rotacion_x(theta, parametros[0], parametros[1], parametros[2])
+            T = TransformacionHomogenea.rotacion_x(theta, parametros[0], parametros[1], parametros[2])
 
         T_total = T_total @ T  # Multiplica las matrices de transformación
 
@@ -133,7 +128,7 @@ def cinematica_inversa(posicion_deseada_tcp, orientacion_deseada_tcp, parametros
     # Las articulaciones superiores (4, 5 y 6) no afectan la posicion del WP
 
     # Obtengo matriz de rotación desde la base hasta el TCP
-    R_tcp = Euler.Euler.euler_a_matriz(orientacion_deseada_tcp[0], orientacion_deseada_tcp[1], orientacion_deseada_tcp[2])
+    R_tcp = Euler.euler_a_matriz(orientacion_deseada_tcp[0], orientacion_deseada_tcp[1], orientacion_deseada_tcp[2])
     print("R_tcp: ", R_tcp)
 
     # Extraigo x
@@ -232,7 +227,7 @@ if __name__ == "__main__":
     print("Posiciones:", posiciones)
     print("Matriz de orientacion final: ", orientacion_tcp)
 
-    angulos_euler = Euler.Euler.matriz_a_euler(orientacion_tcp)
+    angulos_euler = Euler.matriz_a_euler(orientacion_tcp)
     print(f"Los angulos de Euler (en radianes) son: {angulos_euler}")
     
     #Convierto angulos de euler de rad2deg
@@ -260,7 +255,7 @@ if __name__ == "__main__":
     print("Posicion TCP:", posicion_tcp)
     #print("Matriz de Orientacion TCP: \n", orientacion_tcp)
 
-    angulos_euler = Euler.Euler.matriz_a_euler(orientacion_tcp)
+    angulos_euler = Euler.matriz_a_euler(orientacion_tcp)
     #print(f"Los angulos de Euler (en radianes) son: {angulos_euler}")
     angulos_euler_deg = np.rad2deg(angulos_euler)
     print(f"Los angulos de Euler (en grados) son: {angulos_euler_deg}")

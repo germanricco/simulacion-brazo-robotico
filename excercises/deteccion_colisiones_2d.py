@@ -9,16 +9,11 @@ from pathlib import Path
 
 # Importo modulos de planificacion de trayectoria
 project_root = Path(__file__).resolve().parent.parent
-print(f"Project Root: {project_root}")
 
-planificacion_path = project_root / "src" / "planificacion_trayectoria"
-sys.path.append(str(planificacion_path))
+src_path = project_root / "src"
+sys.path.append(str(src_path))
 
-try:
-    import bezier_path_2d
-    print("Modulo bezier_path_2d importado con exito")
-except ModuleNotFoundError:
-    print("Error: No se pudieron importar los modulos ")
+from trajectory_planning import bezier_path_2d
 
 class Rectangle():
     def __init__(self, min_point, max_point):
