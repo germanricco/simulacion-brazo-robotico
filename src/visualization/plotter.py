@@ -144,23 +144,18 @@ if __name__ == '__main__':
 
     # Importo modulos de planificacion de trayectoria
     project_root = Path(__file__).resolve().parent.parent.parent
-    print(f"Project Root: {project_root}")
 
-    colisiones_path = project_root / "src" / "deteccion_colisiones"
-    sys.path.append(str(colisiones_path))
+    src_path = project_root / "src"
+    sys.path.append(str(src_path))
 
-    try:
-        import objetos_geometricos
-        print("Modulo deteccion_colisiones importado con exito")
-    except ModuleNotFoundError:
-        print("Error: No se pudieron importar los modulos ")
+    from collision_detection.geometric_objects import Cuboid
 
     # --- Datos de ejemplo ---
     trayectoria_2d = np.array([[1, 2], [2, 3], [3, 2], [4, 3]])
     trayectoria_3d = np.array([[1, 2, 1], [2, 3, 2], [3, 2, 3], [4, 3, 4]])
 
-    cuboide1 = objetos_geometricos.Cuboid([0, 0, 0], [2, 2, 2])
-    cuboide2 = objetos_geometricos.Cuboid([3, 3, 3], [5, 5, 5])
+    cuboide1 = Cuboid([0, 0, 0], [2, 2, 2])
+    cuboide2 = Cuboid([3, 3, 3], [5, 5, 5])
 
     # --- Ejemplo de plot 2D ---
     plotter_2d = Plotter(title="Trayectoria 2D", dimension=2)

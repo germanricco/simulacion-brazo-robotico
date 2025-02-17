@@ -73,7 +73,7 @@ class Cuboid:
                 self.min_point[2] - epsilon <= punto_np[2] <= self.max_point[2] + epsilon)
     
 
-    def segmento_interseca_cuboide(self, inicio_segmento, fin_segmento, epsilon=1e-6):
+    def segmento_intersecta_cuboide(self, inicio_segmento, fin_segmento, epsilon=1e-6):
         """
         Verifica si un segmento de línea interseca el Cuboid usando el algoritmo de Liang-Barsky (adaptado a 3D).
         Complejidad: O(1) (tiempo constante).

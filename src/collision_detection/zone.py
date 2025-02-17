@@ -9,4 +9,4 @@ class Zone:
         return self.cuboid.contains(point)
     
     def segmento_intersecta_cuboide(self, inicio_segmento, fin_segmento):
-        return self.cuboid.segmento_intesecta_cuboide(inicio_segmento, fin_segmento)
+        return self.cuboid.segmento_intersecta_cuboide(inicio_segmento, fin_segmento)
