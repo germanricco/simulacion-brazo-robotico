@@ -79,8 +79,6 @@ def bernstein_poly(n, i, t):
     return scipy.special.comb(n, i) * t ** i * (1 - t) ** (n - i)
 
 
-
-
 def bezier_derivatives_control_points(control_points, n_derivatives):
     """
     Compute control points of the successive derivatives of a given bezier curve.

@@ -13,34 +13,37 @@ from collision_detection.safety_monitor import SafetyMonitor
 from trajectory_planning.bezier_path import BezierPath
 from trajectory_planning.simple_path import SimplePath
 from visualization.plotter import Plotter
+from controller.robot_controller import RobotController
 
 
-# Instancio un objeto Cuboide y lo establezco como zona segura
-cuboide_1 = Cuboid(min_point=np.array([0,0,0]), max_point=np.array([10,10,10]))
+# Instancio un objeto Robot
+initial_angles = np.array([0, 0, 0, 0, 0, 0])
+robot = RobotController(initial_joint_angles=initial_angles)
+
+# Instancio objetos Cuboide y los establezco como zonas seguras y prohibidas
+cuboide_1 = Cuboid(min_point=np.array([-2000,-2000,0]), max_point=np.array([2000,2000,3000]))
 safty_zone = Zone(cuboide_1, "Safe")
 
-cuboide_2 = Cuboid(min_point=np.array([3,3,0]), max_point=np.array([7,7,4]))
+cuboide_2 = Cuboid(min_point=np.array([1200,1000,0]), max_point=np.array([2000,2000,1000]))
 forbidden_zone = Zone(cuboide_2, "Forbidden")
 
-unsafe_trajectory = SimplePath()
-unsafe_path = unsafe_trajectory.calc_linear_path(np.array([1,5,3]), np.array([9,5,3]), num_points=2)
-
-safe_trajectory = BezierPath()
-safe_path, control_points = safe_trajectory.calc_3points_bezier_path(np.array([1,5,3]), np.array([5,5,6]), np.array([9,5,3]))
+trajectory = BezierPath()
+path, control_points = trajectory.calc_2points_bezier_path(robot.current_tcp_pose[:3], np.array([800,1500,500]),end_direction=[-1,0,0])
 
 # Agrego la zona segura a la lista del safety_monitor
 safety_monitor = SafetyMonitor()
 safety_monitor.add_zone(safty_zone)
 safety_monitor.add_zone(forbidden_zone)
 
-print(f"La trayectoria 1 es segura? {safety_monitor.is_trajectory_safe(unsafe_path)}")
-print(f"La trayectoria 2 es segura? {safety_monitor.is_trajectory_safe(safe_path)}")
+print(f"La trayectoria es segura? {safety_monitor.is_trajectory_safe(path)}")
 
 plotter = Plotter("Titulo de Plot", 3)
+plotter.add_robot(robot=robot)
 plotter.add_cuboid(cuboide_1, "Zona Segura", "green")
 plotter.add_cuboid(cuboide_2, "Zona Prohibida", "red")
-plotter.add_trajectory(unsafe_path, "Trayectoria 1", "orange")
-plotter.add_trajectory(safe_path, "Trayectoria 2", "blue")
-plotter.customize_plot(title="Test Zonas", legend=True, equal_aspect=False)
+
+plotter.add_trajectory(path, "Trayectoria", "black")
+
+plotter.customize_plot(title="Test Plotter", legend=False, equal_aspect=False)
 plotter.show_plot()
 

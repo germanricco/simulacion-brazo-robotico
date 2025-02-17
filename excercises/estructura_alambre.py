@@ -19,23 +19,13 @@ from pathlib import Path
 
 # Obtener el directorio raíz del proyecto
 project_root = Path(__file__).resolve().parent.parent
-print(f"Project Root: {project_root}")
 
 # Agregar rutas relativas
-cinematica_path = project_root / "src" / "cinematica"
-sys.path.append(str(cinematica_path))
+src_path = project_root / "src"
+sys.path.append(str(src_path))
 
-algebra_lineal_path = project_root / "src" / "algebra_lineal"
-sys.path.append(str(algebra_lineal_path))
-
-# Intentar importar el módulo
-try:
-    import cinematica
-    import Euler
-    print("Modulo cinematica importado con exito")
-    print("Modulo algebra_lineal importado con exito")
-except ModuleNotFoundError:
-    print("Error: No se pudieron importar los modulos ")
+from cinematica.cinematica import cinematica_directa_dh
+from algebra_lineal.euler import Euler
 
 # Matriz de parametros geométricos y posición inicial
 matriz_dh_params = np.array([
@@ -55,10 +45,10 @@ def actualizar(val):
     matriz_dh_params[4, 3] = np.radians(slider_theta4.val)
 
     # Obtener posicion y orientacion
-    posiciones, R_tcp  = cinematica.cinematica_directa_dh(matriz_dh_params)
+    posiciones, R_tcp  = cinematica_directa_dh(matriz_dh_params)
 
     # Convertir orientacion en angulos de euler
-    angulos_euler= Euler.Euler.matriz_a_euler(R_tcp)
+    angulos_euler= Euler.matriz_a_euler(R_tcp)
 
     #Conviertir angulos de euler de rad2deg
     angulos_euler_deg = []
@@ -97,7 +87,7 @@ ax.set_ylim([-2, 4])
 ax.set_zlim([-0, 5])
 
 # Visualización inicial
-posiciones, R_tcp = cinematica.cinematica_directa_dh(matriz_dh_params)
+posiciones, R_tcp = cinematica_directa_dh(matriz_dh_params)
 
 ax.scatter(posiciones[0,0], posiciones[0,1], posiciones[0,2], color='green', s=100) 
 ax.plot(posiciones[1:,0], posiciones[1:,1], posiciones[1:,2], 'bo-', linewidth=2)
