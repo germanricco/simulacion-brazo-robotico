@@ -29,7 +29,7 @@ class PathPlanner():
         self.simple_path = SimplePath()
         self.orientation_planner = OrientationPlanner()
 
-    def generate_trajectory(
+    def generate_path(
             self,
             path_type,
             start_pose,
@@ -119,6 +119,61 @@ class PathPlanner():
         else:
             raise ValueError(f"Modo de orientacion no soportado {orientation_mode}")
         
+    def segmentar_path(self, path, num_segments):
+        """
+        Segmenta un path, reduciendo el número de puntos para obtener aproximadamente
+        el número deseado de segmentos.
+
+        Parámetros:
+            * path: (Pose array) Trayectoria de puntos [ [x0, y0, z0], [x1, y1, z1], ... ]
+            * num_segments: (int) Número deseado de segmentos en el path segmentado.
+
+        Retorna:
+            * segmented_path: (Pose array): Nuevo path segmentado (subconjunto de Pose de path original).
+                    Si num_segments es inválido o mayor que el máximo posible,
+                    retorna el path original sin segmentar.
+        """
+        n_points = len(path)
+        if n_points < 2:
+            print(f"Error al segmentar trayectoria. Debe tener mas de 2 puntos")
+            return path
+
+        max_segments = n_points - 1
+        if num_segments <= 0:
+            raise ValueError("num_segments debe ser mayor que 0.")
+        if num_segments >= max_segments:
+            return path  # Retornar path original si se piden demasiados segmentos
+
+        indices = np.linspace(0, n_points - 1, num_segments + 1, dtype=int)
+        segmented_path = []
+
+        for i in indices:
+            segmented_path.append(path[i])
+
+        return segmented_path
+
+    def calc_path_length(self, path):
+        """
+        Calcula la longitud de una trayectoria compuesta por objetos Pose.
+
+        Parámetros:
+            * path: (List[Pose]): Trayectoria de poses
+
+        Retorna:
+            * float: Longitud total de la trayectoria en unidades de coordenadas.
+        """
+        num_puntos = len(path)
+        if num_puntos < 2:
+            return 0
+        
+        posiciones = np.array([pose.position for pose in path])
+
+        # Calcular diferencias entre puntos consecutivos
+        deltas = np.diff(posiciones, axis=0) 
+        longitud_segmentos = np.linalg.norm(deltas, axis=1)
+
+        return np.sum(longitud_segmentos)
+            
 
 if __name__ == "__main__":
     start_pose = Pose(
@@ -132,7 +187,8 @@ if __name__ == "__main__":
     )
 
     planner = PathPlanner()
-    bezier_trajectory = planner.generate_trajectory(
+
+    bezier_path = planner.generate_path(
         path_type="bezier",
         start_pose=start_pose,
         end_pose=end_pose,
@@ -140,13 +196,22 @@ if __name__ == "__main__":
         orientation_mode="slerp"
     )
 
-    #lista de Objetos Pose
-    print(bezier_trajectory[0])
-    #para acceder a ella
-    print(f" Posicion: \n {bezier_trajectory[5].position}")
-    print(f" Orientacion: \n {bezier_trajectory[5].orientation}")
+    print(f"Cant. Puntos Path Original: {len(bezier_path)}")
+    #print(f" Todo la Lista: {bezier_path[:]}")
 
-    for pose in bezier_trajectory:
-        print(f"Posición: {pose.position}, Orientación: {pose.orientation}")
+    # Muestro en pantalla el objeto 5
+    print(bezier_path[5])
+    print(f"Posicion: {bezier_path[5].position}")
+    print(f"Orientacion: {bezier_path[5].orientation} \n")
+
+    # Puebo calculo de longitud de segmento
+    longitud_path = planner.calc_path_length(bezier_path)
+    print(f"Path de Longitud = {longitud_path} unidades")
+    
+    # Pruebo Segmentacion del Path
+    num_segments = 3
+    segmented_bezier_path = planner.segmentar_path(bezier_path, num_segments=10)
+    print(f"Segmented Bezier Path: \n {segmented_bezier_path} \n")
+    print(f"Cant. Puntos Segmented Path = {len(segmented_bezier_path)}")
 
 

@@ -10,6 +10,7 @@ sys.path.append(str(src_path))
 from algebra_lineal.euler import Euler
 from algebra_lineal import matrices_rotacion
 from algebra_lineal.transformaciones import TransformacionHomogenea
+from trajectory_planning.path_planner import Pose
 
 class RobotController:
     def __init__(self, initial_joint_angles):
@@ -85,7 +86,8 @@ class RobotController:
         angulos_euler = Euler.matriz_a_euler(R_tcp)
         angulos_euler_deg = np.rad2deg(angulos_euler)
 
-        tcp_pose = np.concatenate((posicion_tcp, angulos_euler_deg))
+        # Creo objeto Pose para TCP
+        tcp_pose = Pose(position=posicion_tcp, orientation=angulos_euler_deg)
         joint_positions = np.round(joint_positions, decimals=1)
 
         return tcp_pose, joint_positions

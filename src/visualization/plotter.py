@@ -2,6 +2,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+import sys
+from pathlib import Path
+
+# Importo modulos de planificacion de trayectoria
+project_root = Path(__file__).resolve().parent.parent.parent
+
+src_path = project_root / "src"
+sys.path.append(str(src_path))
+
+from collision_detection.geometric_objects import Cuboid
+from algebra_lineal.euler import Euler
+
 class Plotter:
     def __init__(self, title="Plot", dimension=2):
         """
@@ -26,7 +38,12 @@ class Plotter:
         # Creo una lista para los elementos añadidos
         self.added_elements = []
     
-    def add_trajectory(self, trajectory, label="Trajectory", color='blue', linestyle='-', marker=None):
+    def add_trajectory(self,
+                       trajectory,
+                       label="Trajectory",
+                       color='blue',
+                       linestyle='-',
+                       marker=None):
         """
         Añade una trayectoria al plot.
 
@@ -94,7 +111,40 @@ class Plotter:
         joint_positions = robot.get_joints_for_plotting()
         self.ax.scatter(joint_positions[0,0], joint_positions[0,1], joint_positions[0,2], color='green', s=100, label="GCS")     # GCS en verde
         self.ax.plot(joint_positions[1:,0], joint_positions[1:,1], joint_positions[1:,2], 'bo-', linewidth=2, label="Brazo robótico")  # Dibujar el brazo
-        self.ax.scatter(joint_positions[-1,0], joint_positions[-1,1], joint_positions[-1,2], color='red', s=100, label="TCP")
+        self.ax.scatter(joint_positions[-1,0], joint_positions[-1,1], joint_positions[-1,2], color='b', s=100, label="TCP")
+
+    def add_pose(self, pose, label="Pose"):
+        """
+        Añade la visualizacion de una Pose al plot
+
+        Argumentos:
+            * pose (Pose): Objeto Pose que define posicion y orientacion
+            * name (str, opcional): Nombre para etiquetar la Pose
+        """
+        posicion = pose.position
+        angulos_euler_deg = pose.orientation
+        angulos_euler_rad = np.deg2rad(angulos_euler_deg)
+
+        # Dibujar punto rojo
+        self.ax.scatter(posicion[0], posicion[1], posicion[2],color="red", s=100, label=label)
+
+        # Dibujar sistema de coordenadas
+        LONG_EJES = 500
+
+        R_pose = Euler.euler_a_matriz(angulos_euler_rad[0], angulos_euler_rad[1], angulos_euler_rad[2])
+
+        # Ejes locales
+        eje_x = R_pose[:, 0] * LONG_EJES
+        eje_y = R_pose[:, 1] * LONG_EJES
+        eje_z = R_pose[:, 2] * LONG_EJES
+
+        # Dibujar las flechas para los ejes X, Y, Z del TCP
+        self.ax.quiver(posicion[0], posicion[1], posicion[2], eje_x[0], eje_x[1], eje_x[2], color='r', length=1.0, arrow_length_ratio=0.1, label=f'X_{label}') # Eje X en rojo
+        self.ax.quiver(posicion[0], posicion[1], posicion[2], eje_y[0], eje_y[1], eje_y[2], color='g', length=1.0, arrow_length_ratio=0.1, label=f'Y_{label}') # Eje Y en verde
+        self.ax.quiver(posicion[0], posicion[1], posicion[2], eje_z[0], eje_z[1], eje_z[2], color='b', length=1.0, arrow_length_ratio=0.1, label=f'Z_{label}') # Eje Z en azul
+
+        #self.ax.legend()
+
     
     def customize_plot(self, title=None, xlabel="X", ylabel="Y", zlabel="Z",
                        equal_aspect=False, grid=True, legend=True):
@@ -145,17 +195,6 @@ class Plotter:
 
 
 if __name__ == '__main__':
-    import sys
-    from pathlib import Path
-
-    # Importo modulos de planificacion de trayectoria
-    project_root = Path(__file__).resolve().parent.parent.parent
-
-    src_path = project_root / "src"
-    sys.path.append(str(src_path))
-
-    from collision_detection.geometric_objects import Cuboid
-
     # --- Datos de ejemplo ---
     trayectoria_2d = np.array([[1, 2], [2, 3], [3, 2], [4, 3]])
     trayectoria_3d = np.array([[1, 2, 1], [2, 3, 2], [3, 2, 3], [4, 3, 4]])

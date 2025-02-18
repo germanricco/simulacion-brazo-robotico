@@ -19,6 +19,7 @@ from controller.robot_controller import RobotController
 # Instancio un objeto Robot
 initial_angles = np.array([0, 0, 0, 0, 0, 0])
 robot = RobotController(initial_joint_angles=initial_angles)
+current_pose = robot.current_tcp_pose
 
 # Instancio objetos Cuboide y los establezco como zonas seguras y prohibidas
 cuboide_1 = Cuboid(min_point=np.array([-2000,-2000,0]), max_point=np.array([2000,2000,3000]))
@@ -29,8 +30,8 @@ forbidden_zone = Zone(cuboide_2, "Forbidden")
 
 trajectory = BezierPath()
 path = trajectory.calc_2points_bezier_path(
-    start_point=robot.current_tcp_pose[:3],
-    end_point= np.array([800,1500,500]),
+    start_point=robot.current_tcp_pose.position,
+    end_point=np.array([800,1500,500]),
     end_direction=[-1,0,0],
     num_points=100)
 
@@ -43,6 +44,7 @@ print(f"La trayectoria es segura? {safety_monitor.is_trajectory_safe(path)}")
 
 plotter = Plotter("Titulo de Plot", 3)
 plotter.add_robot(robot=robot)
+plotter.add_pose(current_pose, "TCP")
 plotter.add_cuboid(cuboide_1, "Zona Segura", "green")
 plotter.add_cuboid(cuboide_2, "Zona Prohibida", "red")
 
