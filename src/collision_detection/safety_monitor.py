@@ -1,7 +1,7 @@
 import numpy as np
 
 class SafetyMonitor:
-    def __init__(self):
+    def __init__(self, robot):
         """
         Inicializa el gestor de seguridad
         """
@@ -34,6 +34,7 @@ class SafetyMonitor:
         
         # Verificar cada punto de la trayectoria
         for i, point in enumerate(trajectory):
+            print(f"i: {i} || Point: {point}")
             # Verifica si el punto esta en una zona prohibida
             for forbidden_zone in self.forbidden_zones:
                 if forbidden_zone.contains(point):
@@ -53,6 +54,5 @@ class SafetyMonitor:
                 # Verificar interseccion con cada zona prohibida
                 for forbidden_zone in self.forbidden_zones:
                     if forbidden_zone.segmento_intersecta_cuboide(punto_inicial, punto_final):
-                        return False
-                    
+                        return False  
         return True

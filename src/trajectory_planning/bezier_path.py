@@ -8,13 +8,19 @@ class BezierPath:
         """
         self.control_points = None
 
-    def calc_2points_bezier_path(self, start_pose, end_pose, offset=3, start_direction=None, end_direction=None):
+    def calc_2points_bezier_path(self,
+                                 start_point,
+                                 end_point,
+                                 num_points,
+                                 offset=3,
+                                 start_direction=None,
+                                 end_direction=None):
         """
         Calcula los puntos de control y el camino dado el punto de inicio y fin.
 
         Parametros:
-            * start_pose: (numpy array) x, y, z del punto inicial
-            * param end_pose: (numpy array) x, y, z del punto final
+            * start_point: (numpy array) x, y, z del punto inicial
+            * end_point: (numpy array) x, y, z del punto final
             * offset: (float) Factor que controla la distancia de los puntos de control
             * start_direction: (numpy array) Vector de dirección en el punto de inicio.
                 Si es None, se asume inicio desde reposo
@@ -24,12 +30,12 @@ class BezierPath:
             * (numpy array, numpy array)
         """
         # Calculate the distance of the control points
-        control_point_dist = np.linalg.norm(end_pose - start_pose) / offset
+        control_point_dist = np.linalg.norm(end_point - start_point) / offset
         control_point_dist = np.round(control_point_dist, 4)
         #!print(f"Offset: {offset} || Control Point Dist: {control_point_dist}")
         
         # Verifica que los puntos de inicio y fin no sean iguales
-        direccion_vector = end_pose - start_pose
+        direccion_vector = end_point - start_point
         if np.linalg.norm(direccion_vector) == 0:
             print("Error: Los puntos de inicio y fin son iguales")
             return None
@@ -39,26 +45,26 @@ class BezierPath:
         # Si trabajamos con un vector de dirección en el punto de inicio
         if start_direction is not None and np.linalg.norm(start_direction) != 0:
             start_direction = start_direction / np.linalg.norm(start_direction)
-            control_point_1 = start_pose + control_point_dist * start_direction
+            control_point_1 = start_point + control_point_dist * start_direction
         else:
-            control_point_1 = start_pose + control_point_dist * direccion_vector
+            control_point_1 = start_point + control_point_dist * direccion_vector
 
         # Si trabajamos con un vector de direccion en el punto final
         if end_direction is not None and np.linalg.norm(end_direction) != 0:
             end_direction = end_direction / np.linalg.norm(end_direction)
-            control_point_2 = end_pose - control_point_dist * end_direction
+            control_point_2 = end_point - control_point_dist * end_direction
         else:
-            control_point_2 = end_pose - control_point_dist * direccion_vector
+            control_point_2 = end_point - control_point_dist * direccion_vector
 
         control_points = np.array(
-            [start_pose,
+            [start_point,
             control_point_1,
             control_point_2,
-            end_pose])
+            end_point])
         
-        path = self.calc_bezier_path(control_points, n_points=100)
+        path = self.calc_bezier_path(control_points, n_points=num_points)
 
-        return path, control_points
+        return path#, control_point
 
     def calc_bezier_path(self, control_points, n_points=100):
         """
@@ -93,7 +99,6 @@ class BezierPath:
 
         # Caso base: si solo hay un punto de control, es el punto en la curva
         if n == 1:
-            #?print(f"Bezier Return: {control_points[0]}")
             return control_points[0]
 
         # Paso recursivo: interpolar linealmente los puntos de control adyacentes
@@ -105,14 +110,21 @@ class BezierPath:
         # Llamada recursiva con los nuevos puntos de control intermedios
         return self.bezier(t, intermediate_points)
     
-    def calc_3points_bezier_path(self, start_pose, mid_pose, end_pose, offset=3, start_direction=None, end_direction=None):
+    def calc_3points_bezier_path(self,
+                                 start_point,
+                                 mid_point,
+                                 end_point,
+                                 num_points,
+                                 offset=3,
+                                 start_direction=None,
+                                 end_direction=None):
         """
         Calcula los puntos de control y el camino dado el punto de inicio y fin.
 
         Parametros:
-            * start_pose: (numpy array) x, y, z del punto inicial
-            * mid_pose: (numpy array) x, y, z del punto medio
-            * end_pose: (numpy array) x, y, z del punto final
+            * start_point: (numpy array) x, y, z del punto inicial
+            * mid_point: (numpy array) x, y, z del punto medio
+            * end_point: (numpy array) x, y, z del punto final
             * offset: (float)
             * start_direction: (numpy array) Vector de dirección en el punto de inicio.
                 Si es None, se asume inicio desde reposo
@@ -122,10 +134,10 @@ class BezierPath:
             * (numpy array, numpy array)
         """
         # Calculo dist puntos de control y direccion entre puntos extremos
-        control_point_dist = np.linalg.norm(mid_pose - start_pose) / offset
+        control_point_dist = np.linalg.norm(mid_point - start_point) / offset
         control_point_dist = np.round(control_point_dist, 4)
         
-        direccion_vector = end_pose - start_pose
+        direccion_vector = end_point - start_point
         if np.linalg.norm(direccion_vector) == 0:
             print("Error: Los puntos de inicio y fin son iguales")
             return None
@@ -135,47 +147,49 @@ class BezierPath:
         # Si trabajamos con un vector de dirección en el punto de inicio
         if start_direction is not None and np.linalg.norm(start_direction) != 0:
             start_direction = start_direction / np.linalg.norm(start_direction)
-            control_point_1 = start_pose + control_point_dist * start_direction
+            control_point_1 = start_point + control_point_dist * start_direction
         else:
-            control_point_1 = start_pose + control_point_dist * direccion_vector
+            control_point_1 = start_point + control_point_dist * direccion_vector
 
-        control_point_2 = mid_pose - control_point_dist * direccion_vector
+        control_point_2 = mid_point - control_point_dist * direccion_vector
 
         partial_control_points = np.array(
-            [start_pose,
+            [start_point,
             control_point_1,
             control_point_2,
-            mid_pose])
+            mid_point])
         
-        path1 = self.calc_bezier_path(partial_control_points, n_points=100)
+        partial_num_point = num_points/2
         
-        control_point_4 = mid_pose + control_point_dist * direccion_vector
+        path1 = self.calc_bezier_path(partial_control_points, n_points = partial_num_point)
+        
+        control_point_4 = mid_point + control_point_dist * direccion_vector
         # Si trabajamos con un vector de direccion en el punto final
         if end_direction is not None and np.linalg.norm(end_direction) != 0:
             end_direction = end_direction / np.linalg.norm(end_direction)
-            control_point_5 = end_pose - control_point_dist * end_direction
+            control_point_5 = end_point - control_point_dist * end_direction
         else:
-            control_point_5 = end_pose - control_point_dist * direccion_vector
+            control_point_5 = end_point - control_point_dist * direccion_vector
 
         partial_control_points = np.array(
-            [mid_pose,
+            [mid_point,
             control_point_4,
             control_point_5,
-            end_pose])
+            end_point])
         
-        path2 = self.calc_bezier_path(partial_control_points, n_points=100)
+        path2 = self.calc_bezier_path(partial_control_points, n_points=partial_num_point)
 
         control_points = np.array(
-            [start_pose,
+            [start_point,
              control_point_1,
              control_point_2,
-             mid_pose,
+             mid_point,
              control_point_4,
              control_point_5,
-             end_pose])
+             end_point])
 
         path = np.concatenate((path1, path2), axis=0)
-        return path, control_points
+        return path#,control_points
     
     def bezier_derivatives_control_points(control_points, n_derivatives):
         """
@@ -216,31 +230,28 @@ class BezierPath:
 
 
 if __name__ == "__main__":
-    start_pose = np.array([0, 0, 0])
-    mid_pose = np.array([2.5, 5, 0])
-    end_pose = np.array([5, 0, 0])
+    start_point = np.array([0, 0, 0])
+    mid_point = np.array([2.5, 5, 0])
+    end_point = np.array([5, 0, 0])
     
     start_direction = np.array([1, 2, -1])
     end_direction = np.array([1, -2, 1])
 
+    num_points=100
+
     BazierPath = BezierPath()
-    path, control_points = BazierPath.calc_2points_bezier_path(start_pose, end_pose, start_direction=start_direction, end_direction=end_direction)
-    #path, control_points = BazierPath.calc_3points_bezier_path(start_pose, mid_pose, end_pose)
-    #path, control_points = BazierPath.calc_3points_bezier_path(start_pose, mid_pose, end_pose, start_direction=start_direction, end_direction=end_direction)
+    path = BazierPath.calc_2points_bezier_path(start_point, end_point, num_points, start_direction=start_direction, end_direction=end_direction)
 
     # --- Graficar el Path y los puntos de control en 3D ---
     fig = plt.figure(figsize=(8, 6)) # Opcional: Ajustar el tamaño de la figura
     ax = fig.add_subplot(111, projection='3d') # Añade un subplot 3D
 
-    # Graficar los puntos de control
-    ax.plot(control_points[:, 0], control_points[:, 1], control_points[:, 2], 'x-', label='Puntos de Control') # 'ro-' para puntos rojos y linea continua
-
     # Graficar el path de la curva de Bezier
     ax.plot(path[:, 0], path[:, 1], path[:, 2], 'b-', label='Path de Bezier') # 'b-' para linea azul continua
 
     # Añadir punto de inicio y fin (opcional, para visualizacion)
-    ax.plot([start_pose[0]], [start_pose[1]], [start_pose[2]], 'go', markersize=8, label='Inicio') # 'go' punto verde grande
-    ax.plot([end_pose[0]], [end_pose[1]], [end_pose[2]], 'mo', markersize=8, label='Fin') # 'mo' punto magenta grande
+    ax.plot([start_point[0]], [start_point[1]], [start_point[2]], 'go', markersize=8, label='Inicio') # 'go' punto verde grande
+    ax.plot([end_point[0]], [end_point[1]], [end_point[2]], 'mo', markersize=8, label='Fin') # 'mo' punto magenta grande
 
     # --- Personalizacion del grafico 3D ---
     ax.set_xlabel('X')

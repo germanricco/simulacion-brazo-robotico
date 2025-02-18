@@ -28,10 +28,14 @@ cuboide_2 = Cuboid(min_point=np.array([1200,1000,0]), max_point=np.array([2000,2
 forbidden_zone = Zone(cuboide_2, "Forbidden")
 
 trajectory = BezierPath()
-path, control_points = trajectory.calc_2points_bezier_path(robot.current_tcp_pose[:3], np.array([800,1500,500]),end_direction=[-1,0,0])
+path = trajectory.calc_2points_bezier_path(
+    start_point=robot.current_tcp_pose[:3],
+    end_point= np.array([800,1500,500]),
+    end_direction=[-1,0,0],
+    num_points=100)
 
 # Agrego la zona segura a la lista del safety_monitor
-safety_monitor = SafetyMonitor()
+safety_monitor = SafetyMonitor(robot=robot)
 safety_monitor.add_zone(safty_zone)
 safety_monitor.add_zone(forbidden_zone)
 
