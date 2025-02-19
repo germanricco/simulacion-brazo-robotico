@@ -64,12 +64,11 @@ class PathPlanner():
             num_orientations=num_poses
         )
         # Para pasarlo como matriz
-        # poses = np.concatenate((positions, orientations), axis=1)
-        # print(f"Poses: {poses}")
-        # return poses
+        poses = np.concatenate((positions, orientations), axis=1)
+        return poses
 
         # En cada iteracion se crea un elemento Pose
-        return [Pose(pos, ori) for pos, ori in zip(positions, orientations)]
+        # return [Pose(pos, ori) for pos, ori in zip(positions, orientations)]
 
     def generate_positions(self,
             path_type,
@@ -166,14 +165,9 @@ class PathPlanner():
         if num_puntos < 2:
             return 0
         
-        posiciones = np.array([pose.position for pose in path])
-
-        # Calcular diferencias entre puntos consecutivos
-        deltas = np.diff(posiciones, axis=0) 
-        longitud_segmentos = np.linalg.norm(deltas, axis=1)
-
-        return np.sum(longitud_segmentos)
-            
+        longitud_segmento = np.linalg.norm(np.diff(path, axis=0), axis=1)
+        longitud_total = np.sum(longitud_segmento)
+        return longitud_total
 
 if __name__ == "__main__":
     start_pose = Pose(
@@ -188,6 +182,7 @@ if __name__ == "__main__":
 
     planner = PathPlanner()
 
+    # Curva de Bezier de ejemplo
     bezier_path = planner.generate_path(
         path_type="bezier",
         start_pose=start_pose,
@@ -200,17 +195,16 @@ if __name__ == "__main__":
     #print(f" Todo la Lista: {bezier_path[:]}")
 
     # Muestro en pantalla el objeto 5
-    print(bezier_path[5])
-    print(f"Posicion: {bezier_path[5].position}")
-    print(f"Orientacion: {bezier_path[5].orientation} \n")
+    print(f"Pose: {bezier_path[5]}")
+    print(f"Posicion: {bezier_path[5,:3]}")
+    print(f"Orientacion: {bezier_path[5,3:]} \n")
 
     # Puebo calculo de longitud de segmento
     longitud_path = planner.calc_path_length(bezier_path)
     print(f"Path de Longitud = {longitud_path} unidades")
     
     # Pruebo Segmentacion del Path
-    num_segments = 3
-    segmented_bezier_path = planner.segmentar_path(bezier_path, num_segments=10)
+    segmented_bezier_path = planner.segmentar_path(bezier_path, num_segments=4)
     print(f"Segmented Bezier Path: \n {segmented_bezier_path} \n")
     print(f"Cant. Puntos Segmented Path = {len(segmented_bezier_path)}")
 

@@ -8,7 +8,7 @@ class Cuboid:
 
         Parametros:
             * min_point (array): Punto con coords. minimas (x, y, z)
-            * max_poing (array): Punto con coords. maximas (x, y, z)
+            * max_point (array): Punto con coords. maximas (x, y, z)
 
         Retorna:
             * TypeError: Si alguno de los puntos no es un array
@@ -128,26 +128,130 @@ class Cuboid:
         
         # 3. Verificar si hay solapamiento en el rango [0, 1]
         return t_max >= t_min and t_min <= 1.0 and t_max >= 0.0
+    
+
+
+class Capsule:
+    def __init__(self, initial_point, final_point, radius):
+        """
+        Inicializa un objeto capsula definido por 2 puntos y el radio
+
+        Argumentos:
+            * initial_point (array-like): Punto con coords. (x, y, z)
+            * final_point (array-like): Punto con coords. (x, y, z)
+            * radius: Radio de la capsula (en las mismas unidades que los puntos)
+        """
+
+        # Aseguro data-types
+        self.P0 = np.asarray(initial_point)
+        self.P1 = np.asarray(final_point)
+        self.r = float(radius)
+
+    def check_collition(self, test_point, epsilon=1e-6):
+        """
+        Verifica si el punto colisiona con la capsula
+        
+        Argumentos:
+            * test_point: punto a evaluar (mismo formato que initial_point)
+            * epsilon: Tolerancia numerica para comparaciones
+        
+        Retorna:
+            * bool: True si hay colision, False en caso contrario
+        """
+
+        # Convertir entradas
+        P0 = self.P0
+        P1 = self.P1
+        P_test = np.asarray(test_point)
+
+        # Vector del segmento y al punto de prueba
+        # Eq.6-6
+        vector_segmento = P1 - P0
+        # Eq.6-9
+        vector_a_punto = P_test - P0
+
+        # Calculo el modulo del segmento al cuadrado
+        # Nota: utilizo producto punto en lugar de np.norm para evitar sqrt() 
+        # y asi evitar operaciones computacionalmente costosas
+        modulo_segmento_cuadrado = np.dot(vector_segmento, vector_segmento)
+
+        # Caso especial: capsula colapsada (esfera)
+        if modulo_segmento_cuadrado < epsilon:
+            return np.linalg.norm(vector_a_punto) <= self.r + epsilon
+
+        # Eq.6-14
+        t = np.dot(vector_a_punto, vector_segmento)/modulo_segmento_cuadrado
+
+        # Verifico que t este en el intervalo [0,1]
+        if (t >= 0 and t <= 1):
+            # El punto P esta en segmento P0P1
+            # Eq 6-7
+            vector_P = t*vector_segmento
+            distancia = np.linalg.norm(vector_a_punto-vector_P)
+        elif t<0:
+            distancia = np.abs(np.linalg.norm(P0 - P_test))
+        elif t>1:
+            distancia = np.abs(np.linalg.norm(P1 - P_test))
+
+        return distancia <= self.r + epsilon
+
+
         
 if __name__ == "__main__":
-    # Cuboide de ejemplo: [0,0,0] a [5,5,5]
+    #! Pruebas de Validacion Cuboide
+    print(f"\n -- Prueba de Cuboide -- \n")
+    # Cuboide
     mi_cuboid = Cuboid(min_point=np.array([0,0,0]), max_point=np.array([5,5,5]))
-    centro_cubo = [2, 2, 2]
+    punto_dentro = [2, 2, 2]
     punto_fuera = [6, 6, 0]
-    print(f"Un punto interior: {centro_cubo} esta contenido: {mi_cuboid.contains(centro_cubo)}")
+    print(f"Un punto interior: {punto_dentro} esta contenido: {mi_cuboid.contains(punto_dentro)}")
     print(f"Un punto exterior: {punto_fuera} esta contenido: {mi_cuboid.contains(punto_fuera)}")
 
-    # Pruebas de validaciones
+    
     # Caso 1: Segmento totalmente dentro
-    assert mi_cuboid.segmento_interseca_cuboide([1,1,1], [4,4,4]) == True
+    assert mi_cuboid.segmento_intersecta_cuboide([1,1,1], [4,4,4]) == True
 
     # Caso 2: Segmento que intersecta una cara
-    assert mi_cuboid.segmento_interseca_cuboide([-1,-1,2], [6,6,2]) == True
+    assert mi_cuboid.segmento_intersecta_cuboide([-1,-1,2], [6,6,2]) == True
 
     # Caso 3: Segmento paralelo al eje Z pero fuera en X
-    assert mi_cuboid.segmento_interseca_cuboide([-1,2,2], [-1,2,5]) == False
+    assert mi_cuboid.segmento_intersecta_cuboide([-1,2,2], [-1,2,5]) == False
 
     # Caso 4: Segmento tangente a una esquina
-    assert mi_cuboid.segmento_interseca_cuboide([5,5,5], [6,6,6]) == True  # Punto [5,5,5] está en el límite
+    assert mi_cuboid.segmento_intersecta_cuboide([5,5,5], [6,6,6]) == True
 
-    assert mi_cuboid.segmento_interseca_cuboide([-2, -2, 0], [2, 2, 0]) == True #Intersecta en ODC
+
+    #! Pruebas de Validacion Capsula
+    print(f"\n -- Prueba de Capsula-- \n")
+
+    mi_capsula = Capsule(initial_point=np.array([0,0,0]),
+                         final_point=np.array([6,0,0]),
+                         radius=2)
+    
+    # Caso 1: Punto dentro de la capsula con tE[0,1]
+    assert mi_capsula.check_collition(test_point=np.array([3,1,0])) == True
+
+    # Caso 2: Punto fuera de la capsula con tE[0,1]
+    assert mi_capsula.check_collition(test_point=np.array([3,3,0])) == False
+
+    # Caso 3: Punto dentro de la capsula con t<0
+    assert mi_capsula.check_collition(test_point=np.array([-1,0,0])) == True
+
+    # Caso 4: Punto fuera de la capsula con t<0
+    assert mi_capsula.check_collition(test_point=np.array([-2,1,0])) == False
+
+    # Caso 5: Punto dentro de la capsula con t>0
+    assert mi_capsula.check_collition(test_point=np.array([7,0,0])) == True
+
+    # Caso 6: Punto fuera de la capsula con t>0
+    assert mi_capsula.check_collition(test_point=np.array([8,1,0])) == False
+
+    esfera = Capsule(initial_point=np.array([1,1,1]),
+                     final_point=np.array([1,1,1]),
+                     radius=2)
+    
+    # Caso 7: Punto dentro de la capsula colapsada (esfera)
+    assert esfera.check_collition(test_point=np.array([3,1,1])) == True
+
+    # Caso 8: Punto fuera de la esfera
+    assert esfera.check_collition(test_point=np.array([4,1,1])) == False
