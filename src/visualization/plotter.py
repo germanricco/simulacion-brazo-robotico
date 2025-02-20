@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from scipy.spatial.transform import Rotation as R
 
 import sys
 from pathlib import Path
@@ -121,9 +122,8 @@ class Plotter:
             * pose (Pose): Objeto Pose que define posicion y orientacion
             * name (str, opcional): Nombre para etiquetar la Pose
         """
-        posicion = pose.position
-        angulos_euler_deg = pose.orientation
-        angulos_euler_rad = np.deg2rad(angulos_euler_deg)
+        posicion = pose[:3]
+        quat_orientation = pose[3:]
 
         # Dibujar punto rojo
         self.ax.scatter(posicion[0], posicion[1], posicion[2],color="red", s=100, label=label)
@@ -131,7 +131,8 @@ class Plotter:
         # Dibujar sistema de coordenadas
         LONG_EJES = 500
 
-        R_pose = Euler.euler_a_matriz(angulos_euler_rad[0], angulos_euler_rad[1], angulos_euler_rad[2])
+        rotation = R.from_quat(quat_orientation)
+        R_pose = rotation.as_matrix()
 
         # Ejes locales
         eje_x = R_pose[:, 0] * LONG_EJES

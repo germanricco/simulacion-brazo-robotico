@@ -10,14 +10,7 @@ sys.path.append(str(src_root))
 from trajectory_planning.bezier_path import BezierPath
 from trajectory_planning.orientation_planner import OrientationPlanner
 from trajectory_planning.simple_path import SimplePath
-
-class Pose:
-    """
-    Clase auxiliar para representar posicion (x,y,z) y orientacion (A,B,C)
-    """
-    def __init__(self, position: np.ndarray, orientation: np.ndarray):
-        self.position = position
-        self.orientation = orientation
+from utils.auxiliary_methods import verificar_pose
 
 class PathPlanner():
     """
@@ -42,33 +35,47 @@ class PathPlanner():
 
         Parametros:
             * path_type (str): Tipo de trayectoria ('bezier', 'linear', 'circle').
-            * start_pose (Pose): Pose inicial (posicion + orientacion)
-            * end_pose (Pose): Pose final
+            * start_pose: Pose inicial. Permite orientacion en Euler y Quaternions
+            * end_pose: Pose final.
             * num_poses (int): numero de poses a interpolar
             * orientation_mode (str): "slerp" (interpolacion)
 
         Retorna:
-            List[Pose]: Lista de poses a lo largo de la trayectoria.
-                de la forma (n,6) = [x,y,z,A,B,C]
+            List: Lista de poses a lo largo de la trayectoria.
+                de la forma (n,6) = [x,y,z,qx,qy,qz,qw]
         """
-        positions = self.generate_positions(
-            path_type,
-            start_position=start_pose.position,
-            end_position=end_pose.position,
-            num_positions=num_poses)
-        
-        orientations = self.generate_orientations(
-            orientation_mode,
-            start_orientation=start_pose.orientation,
-            end_orientation=end_pose.orientation,
-            num_orientations=num_poses
-        )
+
+        # Verifico validez de poses de entrada
+        if verificar_pose(start_pose) and verificar_pose(end_pose):
+            if isinstance(start_pose, np.ndarray):
+                # Extraigo posicion
+                start_pos = start_pose[:3]
+                end_pos = end_pose[:3]
+                # Extraigo orientaciones
+                start_ori = start_pose[3:]
+                end_ori = end_pose[3:]
+
+                positions = self.generate_positions(
+                    path_type,
+                    start_position=start_pos,
+                    end_position=end_pos,
+                    num_positions=num_poses)
+
+                #Nota: el metodo generate_orientations() funciona unicamente con angulos de Euler
+
+                orientations = self.generate_orientations(
+                    orientation_mode,
+                    start_orientation=start_ori,
+                    end_orientation=end_ori,
+                    num_orientations=num_poses)
+        else:
+            print(f"objeto Pose todavia no soportado")
+            return None
+
         # Para pasarlo como matriz
         poses = np.concatenate((positions, orientations), axis=1)
         return poses
 
-        # En cada iteracion se crea un elemento Pose
-        # return [Pose(pos, ori) for pos, ori in zip(positions, orientations)]
 
     def generate_positions(self,
             path_type,
@@ -109,6 +116,9 @@ class PathPlanner():
             end_orientation,
             num_orientations
     ):
+        """
+        Delega la generacion de orientaciones
+        """
         if orientation_mode == "slerp":
             return self.orientation_planner.plan_orientation(
                 start_orientation=start_orientation,
@@ -117,70 +127,14 @@ class PathPlanner():
             )
         else:
             raise ValueError(f"Modo de orientacion no soportado {orientation_mode}")
-        
-    def segmentar_path(self, path, num_segments):
-        """
-        Segmenta un path, reduciendo el número de puntos para obtener aproximadamente
-        el número deseado de segmentos.
-
-        Parámetros:
-            * path: (Pose array) Trayectoria de puntos [ [x0, y0, z0], [x1, y1, z1], ... ]
-            * num_segments: (int) Número deseado de segmentos en el path segmentado.
-
-        Retorna:
-            * segmented_path: (Pose array): Nuevo path segmentado (subconjunto de Pose de path original).
-                    Si num_segments es inválido o mayor que el máximo posible,
-                    retorna el path original sin segmentar.
-        """
-        n_points = len(path)
-        if n_points < 2:
-            print(f"Error al segmentar trayectoria. Debe tener mas de 2 puntos")
-            return path
-
-        max_segments = n_points - 1
-        if num_segments <= 0:
-            raise ValueError("num_segments debe ser mayor que 0.")
-        if num_segments >= max_segments:
-            return path  # Retornar path original si se piden demasiados segmentos
-
-        indices = np.linspace(0, n_points - 1, num_segments + 1, dtype=int)
-        segmented_path = []
-
-        for i in indices:
-            segmented_path.append(path[i])
-
-        return segmented_path
-
-    def calc_path_length(self, path):
-        """
-        Calcula la longitud de una trayectoria compuesta por objetos Pose.
-
-        Parámetros:
-            * path: (List[Pose]): Trayectoria de poses
-
-        Retorna:
-            * float: Longitud total de la trayectoria en unidades de coordenadas.
-        """
-        num_puntos = len(path)
-        if num_puntos < 2:
-            return 0
-        
-        longitud_segmento = np.linalg.norm(np.diff(path, axis=0), axis=1)
-        longitud_total = np.sum(longitud_segmento)
-        return longitud_total
 
 if __name__ == "__main__":
-    start_pose = Pose(
-        position=np.array([0,0,0]),
-        orientation=np.array([0,0,0])
-    )
 
-    end_pose = Pose(
-        position=np.array([5,5,5]),
-        orientation=np.array([1,0,0])
-    )
+    print(f"\n --Prueba de PathPlanner-- \n")
 
     planner = PathPlanner()
+    start_pose = np.array([0,0,0,0,0,0])
+    end_pose = np.array([5,5,0,90,0,0])
 
     # Curva de Bezier de ejemplo
     bezier_path = planner.generate_path(
@@ -188,24 +142,15 @@ if __name__ == "__main__":
         start_pose=start_pose,
         end_pose=end_pose,
         #mid_pos=np.array([2, 3, 1]),  # kwargs para Bezier
-        orientation_mode="slerp"
+        orientation_mode="slerp",
+        num_poses=100
     )
 
-    print(f"Cant. Puntos Path Original: {len(bezier_path)}")
+    print(f"Cant de Puntos Original: {len(bezier_path)}")
     #print(f" Todo la Lista: {bezier_path[:]}")
 
     # Muestro en pantalla el objeto 5
+    print(f"\nAnalizamos un punto:")
     print(f"Pose: {bezier_path[5]}")
     print(f"Posicion: {bezier_path[5,:3]}")
     print(f"Orientacion: {bezier_path[5,3:]} \n")
-
-    # Puebo calculo de longitud de segmento
-    longitud_path = planner.calc_path_length(bezier_path)
-    print(f"Path de Longitud = {longitud_path} unidades")
-    
-    # Pruebo Segmentacion del Path
-    segmented_bezier_path = planner.segmentar_path(bezier_path, num_segments=4)
-    print(f"Segmented Bezier Path: \n {segmented_bezier_path} \n")
-    print(f"Cant. Puntos Segmented Path = {len(segmented_bezier_path)}")
-
-

@@ -15,22 +15,29 @@ class OrientationPlanner:
             num_points: numero de puntos en la trayectoria
 
         Retorna:
-            (np.array) Trayectoria de orientacion en grados
+            (np.array) Trayectoria de orientacion en quaterniones [qx, qy, qz, qw]
         """
 
-        # Convierto orientaciones eulerianas a cuaterniones
-        start_quat = R.from_euler('xyz', start_orientation, degrees=True).as_quat()
-        end_quat = R.from_euler('xyz', end_orientation, degrees=True).as_quat()
+        # Si se pasa orientacion como angulos de euler los convierto a quaterniones:
+        if len(start_orientation) and len(end_orientation) == 3:
+            # Convierto orientaciones eulerianas a cuaterniones
+            start_quat = R.from_euler('xyz', start_orientation, degrees=True).as_quat()
+            end_quat = R.from_euler('xyz', end_orientation, degrees=True).as_quat()
+        else:
+            start_quat = start_orientation
+            end_quat = end_orientation
 
-        path_orientaciones=np.zeros((num_points, 3))
+        path_orientaciones=np.zeros((num_points, 4))
         t_values = np.linspace(0, 1, num_points)
 
         for i, t in enumerate(t_values):
             # Interpolacion esferica entre cuaterniones
             cuaternion_interpolado = self.slerp(start_quat, end_quat, t)
-            # Convierto nuevamente a euler
-            euler_interpolado = R.from_quat(cuaternion_interpolado).as_euler('xyz', degrees=True)
-            path_orientaciones[i] = euler_interpolado
+
+            # Convierto nuevamente a euler. path_orientaciones se lo debe definir de dim.3
+            #euler_interpolado = R.from_quat(cuaternion_interpolado).as_euler('xyz', degrees=True)
+            #path_orientaciones[i] = euler_interpolado
+            path_orientaciones[i] = cuaternion_interpolado
 
         return path_orientaciones
         
@@ -122,7 +129,23 @@ class OrientationPlanner:
 
     
 if __name__ == "__main__":
+    print(f"\n --Test de plan_orientation()-- \n")
     planner = OrientationPlanner()
 
-    path_orientaciones = planner.plan_orientation([0, 0, 0], [90, 0, 0], 10)
-    print(f"Trayectoria de orientaciones: {path_orientaciones}")
+    start_euler_orientation = np.array([0,0,0])
+    end_euler_orientation = np.array([90,0,0])
+    num_points = 10
+
+    print(f"Prueba de interpolacion en Euler")
+    path_orientaciones = planner.plan_orientation(start_euler_orientation, end_euler_orientation, num_points)
+    print(f"Trayectoria de orientaciones:\n {path_orientaciones}")
+
+    print(f"Prueba de interpolacion en Quaternions")
+    start_rot = R.from_euler('xyz',start_euler_orientation)
+    end_rot = R.from_euler('xyz',end_euler_orientation)
+
+    start_quat = start_rot.as_quat()
+    end_quat = end_rot.as_quat()
+
+    path_quaternions = planner.plan_orientation(start_quat, end_quat, num_points)
+    print(f"Trayectoria de orientaciones:\n {path_orientaciones}")

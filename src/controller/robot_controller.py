@@ -1,4 +1,6 @@
 import numpy as np
+from scipy.spatial.transform import Rotation as R
+
 import sys
 from pathlib import Path
 
@@ -10,7 +12,6 @@ sys.path.append(str(src_path))
 from algebra_lineal.euler import Euler
 from algebra_lineal import matrices_rotacion
 from algebra_lineal.transformaciones import TransformacionHomogenea
-from trajectory_planning.path_planner import Pose
 
 class RobotController:
     def __init__(self, initial_joint_angles):
@@ -38,11 +39,11 @@ class RobotController:
         Calcula la posición y orientación del TCP dado los ángulos de las ariticulaciones.
 
         Parámetros:
-            * theta_angles (list): Lista de ángulos de las articulaciones en radianes [theta1, theta2, theta3, theta4]
+            * theta_angles (np.array): Lista de ángulos de las articulaciones en radianes
 
         Retorna:
-            * tcp_pose (np.array): Coords y angulos de euler (X, Y, Z, A, B, C) de TCP
-            * joint_positions (np.array): Posiciones XYZ de todas las articulaciones
+            * tcp_pose (np.array): Lista con posicion y orientacion de TCP [x,y,z,qx,qy,qz,qw]
+            * joint_positions (np.array): matriz con posiciones XYZ de todas las articulaciones
         """
         num_articulaciones = len(theta_angles)
 
@@ -80,36 +81,57 @@ class RobotController:
         T_tcp = T_base @ T_total @ T_tool
         """
 
-        # Procesar pose final del TCP
+        #! Procesar pose final del TCP
         posicion_tcp = np.round(T_total[:3, 3], decimals=1)
         R_tcp = np.round(T_total[:3, :3], decimals=6)
-        angulos_euler = Euler.matriz_a_euler(R_tcp)
-        angulos_euler_deg = np.rad2deg(angulos_euler)
+
+        # Para obtener orientacion con quaterniones
+        rotacion = R.from_matrix(R_tcp)
+        quaternion = rotacion.as_quat()
+
+        # Para obtener orientacion en Euler
+        #angulos_euler = Euler.matriz_a_euler(R_tcp)
+        #angulos_euler_deg = np.rad2deg(angulos_euler)
 
         # Creo objeto Pose para TCP
-        tcp_pose = Pose(position=posicion_tcp, orientation=angulos_euler_deg)
+        #tcp_pose = Pose(position=posicion_tcp, orientation=angulos_euler_deg)
+
+        tcp_pose = np.concatenate((posicion_tcp, quaternion), axis=0)
         joint_positions = np.round(joint_positions, decimals=1)
 
         return tcp_pose, joint_positions
     
 
-    def inverse_kinematics(self, posicion_deseada_tcp, orientacion_deseada_tcp):
+    def inverse_kinematics(self, goal_tcp_pose):
         """
         Calcula los ángulos de las articulaciones para alcanzar una posición y orientación deseada.
         
         Parámetros:
-            * posicion_deseada: np.array([x, y, z]), posición deseada de TCP en coordenadas cartesianas.
-            * orientacion_deseada: np.array([roll, pitch, yaw]), orientación deseada del TCP en ángulos de Euler.
+            * goal_tcp_pose (np.array): pose deseada de TCP. Puede ser: 
+                [x,y,z,A,B,C] siendo A,B,C angulos de euler en radianes
+                [z,y,z,qx,qy,qz,qw] siendo [qx,qy,qz,qw] un quaternion
 
         Retorna:
             * (np.array): Ángulos de las articulaciones en radianes.
         """
 
+        posicion_deseada_tcp = goal_tcp_pose[:3]
+        orientacion_deseada_tcp = goal_tcp_pose[3:]
+
         #! Parte 1. Dividir el robot en 2 partes (inferior y superior). Decoupling 
         # Las articulaciones superiores (4, 5 y 6) no afectan la posicion del WP
 
-        # Obtengo matriz de rotación desde la base hasta el TCP
-        R_tcp = Euler.euler_a_matriz(orientacion_deseada_tcp[0], orientacion_deseada_tcp[1], orientacion_deseada_tcp[2])
+        # Verifico si la orientacion se describe con euler o quaternions
+        if len(orientacion_deseada_tcp) == 3:
+            print(f"orientacion en Euler: {orientacion_deseada_tcp}")
+            # Obtengo matriz de rotación desde la base hasta el TCP
+            R_tcp = Euler.euler_a_matriz(orientacion_deseada_tcp[0], orientacion_deseada_tcp[1], orientacion_deseada_tcp[2])
+        elif len(orientacion_deseada_tcp) == 4:
+            print(f"orientacion en quaterniones: {orientacion_deseada_tcp}")
+            rotacion = R.from_quat(orientacion_deseada_tcp)
+            R_tcp = rotacion.as_matrix()
+        else:
+            raise TypeError("Orientacion debe quedar expresada en Euler o Quaterniones")
 
         # Extraigo x
         x_vec = np.array([
@@ -210,15 +232,31 @@ class RobotController:
         
 
 if __name__ == "__main__":
+    print(f" \n-- Test Cinematica Directa --\n")
     initial_angles = np.array([0, 0, 0, 0, 0, 0])
     robot = RobotController(initial_joint_angles=initial_angles)
-
     print(f"Current TCP_Pose: {robot.current_tcp_pose}")
     print(f"Joint Positions: {robot.get_joints_for_plotting()}")
 
-    posicion_deseada_tcp = np.array([600, -1000, 3300])
-    orientacion_deseada_tcp = np.array([np.deg2rad(250), np.deg2rad(0), np.deg2rad(-90)])
-    
-    joint_angles = robot.inverse_kinematics(posicion_deseada_tcp, orientacion_deseada_tcp)
+    print(f" \n-- Test Cinematica Inversa --\n")
+    print(f"Utilizando angulos de Euler: ")
+    goal_tcp_position = np.array([600, -1000, 3300])
+    goal_tcp_orientation = np.array([np.deg2rad(250), np.deg2rad(0), np.deg2rad(-90)])
+
+    goal_tcp_pose = np.concatenate((goal_tcp_position, goal_tcp_orientation), axis=0)
+
+    joint_angles = robot.inverse_kinematics(goal_tcp_pose=goal_tcp_pose)
     joint_angles_deg = np.round(np.rad2deg(joint_angles),decimals=1)
     print(f"Joint Angles: {joint_angles_deg}")
+
+    print(f"Utilizando Quaterniones: ")
+
+    rotacion = R.from_euler('xyz', goal_tcp_orientation)
+    goal_quat = rotacion.as_quat()
+
+    goal_tcp_pose_quat = np.concatenate((goal_tcp_position, goal_quat), axis=0)
+
+    joint_angles = robot.inverse_kinematics(goal_tcp_pose=goal_tcp_pose_quat)
+    print(joint_angles)
+    joint_angles_deg = np.round(np.rad2deg(joint_angles),decimals=1)
+    print(f"Joint Angles usando Quaterniones: {joint_angles_deg}")

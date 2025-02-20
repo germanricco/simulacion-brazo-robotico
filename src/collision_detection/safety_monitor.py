@@ -19,21 +19,27 @@ class SafetyMonitor:
         else:
             raise ValueError(f"Tipo de zona no soportado: {zone.zone_type}")
         
-    def is_trajectory_safe(self, trajectory):
+    def static_check(self, cartasian_path):
+        pass
+
+    def dynamic_check(self, joint_path):
+        pass
+        
+    def is_path_safe(self, path):
         """
         Verifica si una trayectoria es segura.
 
         Argumentos:
-            * trajectory (numpy.array): Una matriz de forma (n, 3) que representa la trayectoria.
+            * path (numpy.array): Una matriz de forma (n, 3) que representa la trayectoria.
 
         Retorna:
             * bool: True si la trayectoria es segura. False si no lo es.
         """
-        if not isinstance(trajectory, np.ndarray) or trajectory.ndim != 2 or trajectory.shape[1] != 3:
+        if not isinstance(path, np.ndarray) or path.ndim != 2 or path.shape[1] != 3:
             raise ValueError("La trayectoria debe ser un numpy array de forma (n, 3)")
         
         # Verificar cada punto de la trayectoria
-        for i, point in enumerate(trajectory):
+        for i, point in enumerate(path):
             print(f"i: {i} || Point: {point}")
             # Verifica si el punto esta en una zona prohibida
             for forbidden_zone in self.forbidden_zones:
@@ -48,7 +54,7 @@ class SafetyMonitor:
             
             # Si el punto es seguro, verificar interseccion del segmento con zona prohibida
             if i > 0:
-                punto_inicial = trajectory[i - 1]
+                punto_inicial = path[i - 1]
                 punto_final = point
 
                 # Verificar interseccion con cada zona prohibida
@@ -56,3 +62,11 @@ class SafetyMonitor:
                     if forbidden_zone.segmento_intersecta_cuboide(punto_inicial, punto_final):
                         return False  
         return True
+
+    def _update_robot_model(self, joints_positions):
+        # Logica para actualizar modelo del robot segun pose actual
+        pass
+
+    def _check_capsule_collision(self, capsule):
+        # Logica para deteccion de colisiones
+        pass
