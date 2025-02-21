@@ -56,7 +56,7 @@ class PathPlanner():
                 end_ori = end_pose[3:]
 
                 positions = self.generate_positions(
-                    path_type,
+                    path_type=path_type,
                     start_position=start_pos,
                     end_position=end_pos,
                     num_positions=num_poses)

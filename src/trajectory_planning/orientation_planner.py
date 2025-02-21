@@ -93,7 +93,6 @@ class OrientationPlanner:
         
         if alpha < epsilon:
             # Interpolacion lineal standard si los cuaterniones son muy cercanos
-            print("Utilizando NLERP")
             q = (1 - t) * start_quat + t * end_quat
             return q / np.linalg.norm(q)
 

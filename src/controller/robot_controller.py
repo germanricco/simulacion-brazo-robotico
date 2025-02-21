@@ -123,11 +123,9 @@ class RobotController:
 
         # Verifico si la orientacion se describe con euler o quaternions
         if len(orientacion_deseada_tcp) == 3:
-            print(f"orientacion en Euler: {orientacion_deseada_tcp}")
             # Obtengo matriz de rotación desde la base hasta el TCP
             R_tcp = Euler.euler_a_matriz(orientacion_deseada_tcp[0], orientacion_deseada_tcp[1], orientacion_deseada_tcp[2])
         elif len(orientacion_deseada_tcp) == 4:
-            print(f"orientacion en quaterniones: {orientacion_deseada_tcp}")
             rotacion = R.from_quat(orientacion_deseada_tcp)
             R_tcp = rotacion.as_matrix()
         else:

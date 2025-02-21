@@ -1,13 +1,52 @@
 import numpy as np
+import sys
+from pathlib import Path
+
+# Importo modulos
+src_root = Path(__file__).resolve().parent.parent
+print(src_root)
+sys.path.append(str(src_root))
+
+from utils.auxiliary_methods import verificar_path
 
 class PathGenerator:
-    """
-    
-    """
-    def __init__(self, path):
-        """path: Matriz de Nx7 de poses"""
+    def __init__(self, robot, path):
+        """
+        Convierte trayectorias cartesianas a joint-space y calcula posiciones
+        de articulaciones. Ademas concatena paths, etc.
+
+        Argumentos:
+            * robot: instancia de RobotController
+            * path (np.array): Matriz de Nx7 de poses
+        """
+        self.robot = robot
         self.original_path = path
         self.current_path = path.copy()
+
+        self.original_joint_path = self.cartasian_to_joint_space(self.original_path)
+
+    def cartasian_to_joint_space(self, cartasian_path):
+        """
+        Convierte una trayectoria cartesiana en joint-space
+
+        Argumentos:
+            * cartasian_path (np.array): Matriz de Nx7
+        
+        Retorna:
+            * joint_path (np.array): Matriz de Nx6
+        """
+
+        if not verificar_path(cartasian_path):
+            raise TypeError(f"Error. Path no valido.")
+        
+        joint_path = np.array([]).reshape(0,6)
+
+        for i, pose in enumerate(cartasian_path):
+            joint_pose = self.robot.inverse_kinematics(pose)
+            joint_pose = np.round(joint_pose, 2)
+            joint_path = np.vstack((joint_path, joint_pose))
+
+        return joint_path
 
     def segmentar_path(self, path, num_segments):
         """
@@ -47,10 +86,10 @@ class PathGenerator:
     
     def calc_path_length(self, path):
         """
-        Calcula la longitud de una trayectoria compuesta por objetos Pose.
+        Calcula la longitud de una trayectoria cartesiana.
 
-        Parámetros:
-            * path: (List[Pose]): Trayectoria de poses
+        Parametros:
+            * path: (np.array): Trayectoria de poses
 
         Retorna:
             * float: Longitud total de la trayectoria en unidades de coordenadas.

@@ -40,6 +40,25 @@ def verificar_pose(pose):
         print(f"Error: pose debe ser un objeto Pose o np.array(), pero es {type(pose)}")
         return False
 
+def verificar_path(path):
+    """
+    Verifica si el argumento de entrada es un path cartesiano valido
+    """
+    if not isinstance(path, np.ndarray):
+        print(f"La trayectoria debe ser (np.array)")
+        return False
+        
+    if path.ndim != 2:
+        print(f"La trayectoria debe ser matriz de forma (n, 7), pero tiene dimension {path.ndim}")
+        return False
+    
+    if path.shape[1] !=7:
+        print(f"La trayectoria debe ser matriz de forma (n, 7) pero tiene forma {path.shape}")
+        return False
+    
+    return True
+        
+
 if __name__ == "__main__":
 
     # -- Validacion de funcion verificar_pose --
