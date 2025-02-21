@@ -5,6 +5,9 @@ class Zone:
         self.cuboid = cuboid
         self.zone_type = zone_type  # "Safe" o "Forbidden"
 
+        self.min_bounds = cuboid.min_point
+        self.max_bounds = cuboid.max_point
+
     def contains(self, point: np.ndarray) -> bool:
         return self.cuboid.contains(point)
     

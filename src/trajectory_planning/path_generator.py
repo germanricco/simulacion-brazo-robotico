@@ -24,6 +24,7 @@ class PathGenerator:
         self.current_path = path.copy()
 
         self.original_joint_path = self.cartasian_to_joint_space(self.original_path)
+        self.current_joint_path = self.original_joint_path.copy()
 
     def cartasian_to_joint_space(self, cartasian_path):
         """
