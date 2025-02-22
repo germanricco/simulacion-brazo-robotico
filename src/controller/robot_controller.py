@@ -13,6 +13,8 @@ from algebra_lineal.euler import Euler
 from algebra_lineal import matrices_rotacion
 from algebra_lineal.transformaciones import TransformacionHomogenea
 
+from collision_detection.geometric_objects import Capsule
+
 class RobotController:
     def __init__(self, initial_joint_angles):
         """
@@ -31,8 +33,7 @@ class RobotController:
             [244, 0, 0]
             ])
         self.current_tcp_pose, self.joints_positions = self.forward_kinematics(self.joint_angles)
-        self.urdf_file = []
-        self.moving = False
+        self.capsule_radius = 10 # Radio standar para simplificar
 
     def forward_kinematics(self, theta_angles):
         """ 
@@ -101,7 +102,6 @@ class RobotController:
 
         return tcp_pose, joint_positions
     
-
     def inverse_kinematics(self, goal_tcp_pose):
         """
         Calcula los ángulos de las articulaciones para alcanzar una posición y orientación deseada.
@@ -204,11 +204,51 @@ class RobotController:
             print(f"Posición imposible de alcanzar. ")
             return None
         
-    def get_joints_for_plotting(self):
+    def compute_capsules(self, joints):
+        """
+        Calcula la posicion de las articulaciones y crea capsulas
+        
+        Argumentos:
+            * joints (np.array): lista con posiciones angulares [j1,j2,..,j6]
+
+        Retorna:
+            * capsules (List[Capsule])
+        """
+        tcp_position, joints_positions = self.forward_kinematics(joints)
+
+        # Agregar verificaciones
+        if isinstance (joints_positions, np.ndarray):
+                print(f"Capsules at:\n{joints_positions}") 
+        else:
+            raise TypeError("Joint Positions deben ser np.array")
+        
+        # Creo lista de objetos Capsule
+        capsules = []
+
+        for i in range(len(joints_positions) - 1):
+            pos_actual = joints_positions[i]
+            pos_siguiente = joints_positions[i+1]
+            # Creo la capsula y la agrego a lista
+            capsules.append(Capsule(
+                initial_point=pos_actual,
+                final_point=pos_siguiente,
+                radius=self.capsule_radius
+            ))
+
+        return capsules
+
+    def get_joints(self):
         return self.joints_positions
+    
+
+    def within_limits(self, joints: np.ndarray) -> bool:
+        #? join_limits
+        return np.all((joints >= self.joint_limits[:, 0]) & 
+                      (joints <= self.joint_limits[:, 1]))
         
     def get_status(self):
         pass
+
 
     def move_to_goal(self):
         pass
@@ -230,11 +270,25 @@ class RobotController:
         
 
 if __name__ == "__main__":
+
     print(f" \n-- Test Cinematica Directa --\n")
+    # Angulos iniciales (Home Position)
     initial_angles = np.array([0, 0, 0, 0, 0, 0])
+
     robot = RobotController(initial_joint_angles=initial_angles)
     print(f"Current TCP_Pose: {robot.current_tcp_pose}")
-    print(f"Joint Positions: {robot.get_joints_for_plotting()}")
+    print(f"Joint Positions:\n{robot.get_joints_for_plotting()}")
+
+    # Posicion angular de prueba
+    joint_angles = np.array([np.deg2rad(45),
+                             np.deg2rad(45),
+                             np.deg2rad(45),
+                             np.deg2rad(45),
+                             np.deg2rad(45),
+                             np.deg2rad(45)])
+    
+    capsules = robot.compute_capsules(joint_angles)
+    print(capsules)
 
     print(f" \n-- Test Cinematica Inversa --\n")
     print(f"Utilizando angulos de Euler: ")

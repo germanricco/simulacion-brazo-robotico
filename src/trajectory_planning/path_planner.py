@@ -42,7 +42,7 @@ class PathPlanner():
 
         Retorna:
             List: Lista de poses a lo largo de la trayectoria.
-                de la forma (n,6) = [x,y,z,qx,qy,qz,qw]
+                de la forma (n,7) = [x,y,z,qx,qy,qz,qw]
         """
 
         # Verifico validez de poses de entrada
@@ -91,7 +91,9 @@ class PathPlanner():
             return self.bezier_path.calc_2points_bezier_path(
                 start_point=start_position,
                 end_point=end_position,
-                num_points=num_positions
+                num_points=num_positions,
+                start_direction=None,
+                end_direction=None
             )
         elif path_type == "linear":
             return self.simple_path.calc_linear_path(
@@ -105,7 +107,8 @@ class PathPlanner():
                 start_point=start_position,
                 mid_point=mid_point,
                 end_point=end_position,
-                num_points=num_positions
+                num_points=num_positions,
+                rotation_angle=None
             )
         else:
             raise ValueError(f"Tipo de trayectoria no soportado {path_type}")

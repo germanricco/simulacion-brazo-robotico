@@ -13,3 +13,7 @@ class Zone:
     
     def segmento_intersecta_cuboide(self, inicio_segmento, fin_segmento):
         return self.cuboid.segmento_intersecta_cuboide(inicio_segmento, fin_segmento)
+    
+    def closest_point_on_cuboid(self, point):
+        return self.cuboid.closest_point_on_cuboid(point)
+

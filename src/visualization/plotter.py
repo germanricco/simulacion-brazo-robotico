@@ -84,7 +84,7 @@ class Plotter:
             raise ValueError("Cuboids solo se pueden añadir a plots 3D.")
         
         #! Se asume que el objeto 'cuboid' tiene metodo para obtener vertices
-        vertices = cuboid.get_vertices_for_plotting()
+        vertices = cuboid.get_vertices()
         if vertices is None or len(vertices) != 8:
             raise ValueError("El objeto cuboid debe proporcionar 8 vertices para graficar en 3D.")
         
@@ -109,7 +109,7 @@ class Plotter:
         self.added_elements.append({'type': 'cuboid', 'label': label}) # Rastreo opcional
 
     def add_robot(self, robot, label="Robotic Arm", color="blue"):
-        joint_positions = robot.get_joints_for_plotting()
+        joint_positions = robot.get_joints()
         self.ax.scatter(joint_positions[0,0], joint_positions[0,1], joint_positions[0,2], color='green', s=100, label="GCS")     # GCS en verde
         self.ax.plot(joint_positions[1:,0], joint_positions[1:,1], joint_positions[1:,2], 'bo-', linewidth=2, label="Brazo robótico")  # Dibujar el brazo
         self.ax.scatter(joint_positions[-1,0], joint_positions[-1,1], joint_positions[-1,2], color='b', s=100, label="TCP")

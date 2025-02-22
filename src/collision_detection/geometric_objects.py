@@ -37,7 +37,7 @@ class Cuboid:
         self.min_point = np.array(min_point)
         self.max_point = np.array(max_point)
 
-    def get_vertices_for_plotting(self):
+    def get_vertices(self):
         p1 = self.min_point
         p2 = self.max_point
         vertices = np.array([
@@ -71,7 +71,6 @@ class Cuboid:
         return (self.min_point[0] - epsilon <= punto_np[0] <= self.max_point[0] + epsilon and
                 self.min_point[1] - epsilon <= punto_np[1] <= self.max_point[1] + epsilon and
                 self.min_point[2] - epsilon <= punto_np[2] <= self.max_point[2] + epsilon)
-    
 
     def segmento_intersecta_cuboide(self, inicio_segmento, fin_segmento, epsilon=1e-6):
         """
@@ -129,10 +128,17 @@ class Cuboid:
         # 3. Verificar si hay solapamiento en el rango [0, 1]
         return t_max >= t_min and t_min <= 1.0 and t_max >= 0.0
     
+    def closest_point_on_cuboid(self, point: np.ndarray, epsilon=1e-6) -> np.ndarray:
+        """
+        Devuelve el punto más cercano en el cuboide a un punto dado.
+        """
+        min_bounds = self.min_point - epsilon
+        max_bounds = self.max_point + epsilon
 
+        return np.clip(point, min_bounds, max_bounds)
 
 class Capsule:
-    def __init__(self, initial_point, final_point, radius):
+    def __init__(self, initial_point: np.ndarray, final_point: np.ndarray, radius: float):
         """
         Inicializa un objeto capsula definido por 2 puntos y el radio
 
@@ -145,12 +151,12 @@ class Capsule:
         # Aseguro data-types
         self.P0 = np.asarray(initial_point)
         self.P1 = np.asarray(final_point)
-        self.r = float(radius)
+        self.radius = float(radius)
 
     def check_collition(self, test_point, epsilon=1e-6):
         """
-        Verifica si el punto colisiona con la capsula
-        
+        Verifica si un punto colisiona con la capsula
+        r
         Argumentos:
             * test_point: punto a evaluar (mismo formato que initial_point)
             * epsilon: Tolerancia numerica para comparaciones
@@ -177,7 +183,7 @@ class Capsule:
 
         # Caso especial: capsula colapsada (esfera)
         if modulo_segmento_cuadrado < epsilon:
-            return np.linalg.norm(vector_a_punto) <= self.r + epsilon
+            return np.linalg.norm(vector_a_punto) <= self.radius + epsilon
 
         # Eq.6-14
         t = np.dot(vector_a_punto, vector_segmento)/modulo_segmento_cuadrado
@@ -193,8 +199,21 @@ class Capsule:
         elif t>1:
             distancia = np.abs(np.linalg.norm(P1 - P_test))
 
-        return distancia <= self.r + epsilon
+        return distancia <= self.radius + epsilon
 
+    def closest_point_on_segment(self, point: np.ndarray):
+        """
+        Devuelve el punto mas cercano en el segmento a un punto dado
+        """
+        seg_vec = self.P1 - self.P0
+        seg_length_sq = np.dot(seg_vec, seg_vec)
+        
+        if seg_length_sq == 0:
+            return self.P0.copy()
+        
+        t = np.dot(point - self.P0, seg_vec) / seg_length_sq
+        t_clamped = np.clip(t, 0.0, 1.0)
+        return self.P0 + t_clamped * seg_vec
 
         
 if __name__ == "__main__":

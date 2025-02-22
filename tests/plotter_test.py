@@ -33,41 +33,49 @@ forbidden_zone = Zone(cuboide_2, "Forbidden")
 cuboide_3 = Cuboid(min_point=np.array([-3000,-2000,0]), max_point=np.array([-2000,2000,2000]))
 safety_zone_2 = Zone(cuboide_3, "Safe")
 
-cuboide_4 = Cuboid(min_point=np.array([-3000,-2000,0]), max_point=np.array([0,0,1000]))
+cuboide_4 = Cuboid(min_point=np.array([-3000,-2000,0]), max_point=np.array([-6,-6,1000]))
 forbidden_zone_2 = Zone(cuboide_4, "Forbidden")
 
 # Agrego las zonas a las listas del safety_monitor
 safety_monitor = SafetyMonitor(robot=robot)
 safety_monitor.add_zone(safty_zone)
-print(f"Safe limits:\n {safety_monitor._safe_limits}")
-
 safety_monitor.add_zone(safety_zone_2)
-print(f"Safe limits:\n {safety_monitor._safe_limits}")
-
 safety_monitor.add_zone(forbidden_zone)
-print(f"Forbidden limits:\n {safety_monitor._forbidden_limits}")
-
 safety_monitor.add_zone(forbidden_zone_2)
+
+print(f"Safe limits:\n {safety_monitor._safe_limits}")
 print(f"Forbidden limits:\n {safety_monitor._forbidden_limits}")
 
+# Creo path con planner
 planner = PathPlanner()
 
 original_path = planner.generate_path(
     path_type='linear',
     start_pose=current_pose,
-    end_pose=np.array([200, 1500, 500, 0, 0, 0, 1]),
+    end_pose=np.array([-1000, -1000, 2000, 0, 0, 0, 1]),
     num_poses=20,
     orientation_mode='slerp'
 )
 
-print(f"Pose 5 de original_path:\n {original_path[5,:]}")
+# Analizo retorno en un punto
+print(f"Posicion 5 de original_path:\n {original_path[5,:]}")
 
-path_generator = PathGenerator(robot=robot, path=original_path)
-current_joint_path = path_generator.current_joint_path
+if safety_monitor.verify_tcp_path(original_path[:,:3]):
+    print(f"El path del tcp es seguro")
 
-print(f"Original Joint Path:\n {current_joint_path}")
+    # Creo el joint_path con path_generator
+    path_generator = PathGenerator(robot=robot, path=original_path)
+    current_joint_path = path_generator.current_joint_path
+    print(f"Posicion 5 de current joint path:\n {current_joint_path[5]}")
 
-print(f"La trayectoria es segura? {safety_monitor.is_path_safe(original_path[:,:3])}")
+    if safety_monitor.verify_full_body(current_joint_path):
+        print(f"El cuerpo no colisiona con las zonas prohibidas")
+    
+    else:
+        print(f"El cuerpo colisiona")
+
+else:
+    print(f"El path del tcp es inseguro")
 
 plotter = Plotter("Titulo de Plot", 3)
 
