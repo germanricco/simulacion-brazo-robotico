@@ -51,8 +51,8 @@ planner = PathPlanner()
 
 original_path = planner.generate_path(
     path_type='linear',
-    start_pose=current_pose,
-    end_pose=np.array([-1000, -1000, 2000, 0, 0, 0, 1]),
+    start_pose=np.array([1755, -1500, 2660, 0, 0, 0, 1]),
+    end_pose=np.array([1755, 1500, 2660, 0, 0, 0, 1]),
     num_poses=20,
     orientation_mode='slerp'
 )
@@ -67,6 +67,7 @@ if safety_monitor.verify_tcp_path(original_path[:,:3]):
     path_generator = PathGenerator(robot=robot, path=original_path)
     current_joint_path = path_generator.current_joint_path
     print(f"Posicion 5 de current joint path:\n {current_joint_path[5]}")
+    print(path_generator.original_joint_path)
 
     if safety_monitor.verify_full_body(current_joint_path):
         print(f"El cuerpo no colisiona con las zonas prohibidas")
