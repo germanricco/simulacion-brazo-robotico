@@ -15,9 +15,8 @@ print(src_root)
 sys.path.append(str(src_root))
 
 from trajectory_planning.trajectory_planner import TrajectoryPlanner
-from utils.logger import LoggerSetup
+from trajectory_planning.trajectory import Trajectory
 
-logger_setup = LoggerSetup(debug_mode=True)
 
 # CONSTANTES
 ACCELERATION_ID = 0
@@ -49,9 +48,6 @@ class SCurveProfile(VelocityProfile):
         """
         Inicializa un perfil S-Curve con sus restricciones cinemáticas
         """
-        # Obtenger los loggers
-        self.logger = logger_setup.get_planning_logger()
-        self.error_logger = logger_setup.get_error_logger()
 
     def _check_shape(self, *args):
         sh = len(args[0])
@@ -81,7 +77,7 @@ class SCurveProfile(VelocityProfile):
             return dq > Tj*(v0+v1)
 
         else:
-            raise PlanningError("Something went wrong")
+            raise ValueError("Something went wrong")
 
     def _compute_maximum_speed_reached(self, q0, q1, v0, v1,
                                         v_max, a_max, j_max):
@@ -115,8 +111,8 @@ class SCurveProfile(VelocityProfile):
         Tv = (q1-q0)/v_max - (Ta/2)*(1+v0/v_max)-(Td/2)*(1+v1/v_max)
 
         if Tv < 0:
-            self.logger.error("")
-            raise PlanningError("Maximum velocity is not reached. "
+            #self.logger.error("")
+            raise ValueError("Maximum velocity is not reached. "
                                 "Failed to plan trajectory")
 
         return Tj1, Ta, Tj2, Td, Tv
@@ -142,7 +138,7 @@ class SCurveProfile(VelocityProfile):
         Td = (v - 2*v1 + np.sqrt(delta))/(2*a_max)
 
         if (Ta - 2*Tj < EPSILON) or (Td - 2*Tj < EPSILON):
-            raise PlanningError("Maximum acceletaion is not reached. Failed to"
+            raise ValueError("Maximum acceletaion is not reached. Failed to"
                                 " plan trajectory")
 
         return Tj1, Ta, Tj2, Td, Tv
@@ -178,11 +174,11 @@ class SCurveProfile(VelocityProfile):
                     _a_max *= l
                     it += 1
 
-            except PlanningError:
+            except ValueError:
                 it += 1
                 _a_max *= l
 
-        raise PlanningError("Failed to find appropriate a_max")
+        raise ValueError("Failed to find appropriate a_max")
 
     def _sign_transforms(self, q0, q1, v0, v1, v_max, a_max, j_max):
         """
@@ -300,10 +296,10 @@ class SCurveProfile(VelocityProfile):
         """
         Returns function wich wrapps trajectory function with sign transforms
         """
-        zipped_args = self.__sign_transforms(q0, q1, v0, v1, v_max, a_max,
+        zipped_args = self._sign_transforms(q0, q1, v0, v1, v_max, a_max,
                                              j_max)
 
-        traj_func = self.__get_trajectory_func(Tj1, Ta, Tj2,
+        traj_func = self._get_trajectory_func(Tj1, Ta, Tj2,
                                                Td, Tv, *zipped_args)
 
         def sign_back_transformed(t):
@@ -326,29 +322,29 @@ class SCurveProfile(VelocityProfile):
                 Tj1, Ta, Tj2, Td, Tv =\
                     self._compute_maximum_speed_reached(q0, q1, v0, v1,
                                                          v_max, a_max, j_max)
-            except PlanningError as e:
-                planning_logger.warn(e)
+            except ValueError as e:
+                print(f"Error. {e}")
 
                 try:
                     Tj1, Ta, Tj2, Td, Tv =\
                         self._compute_maximum_speed_not_reached(q0, q1, v0, v1,
                                                                  v_max, a_max,
                                                                  j_max)
-                except PlanningError as e:
-                    planning_logger.warn(e)
+                except ValueError as e:
+                    print(f"Error. {e}")
 
                     try:
                         Tj1, Ta, Tj2, Td, Tv =\
                             self._scurve_search_planning(q0, q1, v0, v1, v_max,
                                                           a_max, j_max)
-                    except PlanningError as e:
-                        planning_logger.warn(e)
-                        raise PlanningError("Trajectory is infeasible")
+                    except ValueError as e:
+                        print(f"Error. {e}")
+                        raise ValueError("Trajectory is infeasible")
 
             return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
 
         else:
-            raise PlanningError("Trajectory is not feasible")
+            raise TypeError("Trajectory is not feasible")
 
     def _put_params(self, params_list, params, dof):
         for i in range(len(params_list)):
@@ -383,6 +379,8 @@ class SCurveProfile(VelocityProfile):
         if T is None:
             # Calculo la trayectoria para el tiempo minimo
             res = self._scurve_profile_no_opt(*zipped_args)
+
+        return res
 
     def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, t=None):
         """
@@ -433,7 +431,54 @@ class SCurveProfile(VelocityProfile):
         
         print(f"Max Displacement parameters:\n {max_displacement_params}")
 
-        pass
+        self._put_params(trajectory_params,
+                          max_displacement_params,
+                          max_displacement_id)
+        
+        print(f"Updated Trajectory Parameters:\n {trajectory_params}")
+
+        max_displacement_time = self._get_dof_time(trajectory_params,
+                                                    max_displacement_id)
+        T[max_displacement_id] = max_displacement_time
+
+        for _q0, _q1, _v0, _v1, ii in zip(q0, q1, v0, v1, range(ndof)):
+            if ii == max_displacement_id:
+                continue
+
+            #planning_logger.info("Computing %d DOF trajectory" % ii)
+
+            # In case if final velocity is non-zero
+            # We need to synchronize it in time with the trajectory with
+            # the longest execution time
+            if _v1 != 0:
+                traj_params =\
+                    self._plan_trajectory_1D(_q0, _q1, _v0, _v1, v_max,
+                                              a_max, j_max,
+                                              T=max_displacement_time)
+
+            # if final velocity is zero we do not need to worry about
+            # syncronization
+            else:
+                traj_params = self._plan_trajectory_1D(_q0, _q1, _v0, _v1,
+                                                        v_max, a_max, j_max)
+
+            T[ii] = Ta[ii] + Td[ii] + Tv[ii]
+            self._put_params(trajectory_params, traj_params, ii)
+
+        # Getting trajectory functions
+        for dof in range(ndof):
+            tr_func = self._get_trajectory_function(q0[dof], q1[dof],
+                                                     v0[dof], v1[dof], v_max,
+                                                     a_max, j_max,
+                                                     *trajectory_params[:, dof])
+            trajectory_funcs.append(tr_func)
+
+        tr = Trajectory()
+        tr.time = (T[max_displacement_id],)
+        tr.trajectory = trajectory_funcs
+        tr.dof = ndof
+
+        return tr
 
 
 if __name__ == "__main__":
@@ -445,10 +490,10 @@ if __name__ == "__main__":
     #v1 = [5]
 
     # Para 2 articulaciones
-    q0 = [-2, -4]
-    q1 = [20, 20]
-    v0 = [1, 1]
-    v1 = [5, 5]
+    q0 = [-2,]
+    q1 = [20,]
+    v0 = [1,]
+    v1 = [5,]
 
     # Restricciones cinematicas
     v_max = 20
@@ -456,4 +501,9 @@ if __name__ == "__main__":
     j_max = 100
 
     planner = SCurveProfile()
-    planner.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max)
+    trajectory_1 = planner.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max)
+    print(trajectory_1)
+
+    print(trajectory_1.time)
+    print(trajectory_1.dof)
+    print(trajectory_1.debug)
