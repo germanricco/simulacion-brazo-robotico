@@ -5,7 +5,6 @@ https://github.com/nameofuser1/py-scurve/tree/master
 
 from abc import ABC, abstractmethod
 import numpy as np
-
 import sys
 from pathlib import Path
 
@@ -49,6 +48,7 @@ class SCurveProfile(VelocityProfile):
         Inicializa un perfil S-Curve con sus restricciones cinemáticas
         """
 
+
     def _check_shape(self, *args):
         sh = len(args[0])
 
@@ -58,9 +58,12 @@ class SCurveProfile(VelocityProfile):
 
         return (sh,)
     
+
     def _scurve_check_possibility(self, q0, q1, v0, v1, v_max, a_max, j_max):
         """
-        Check whether trajectory is feasible. If not raises PlanningError
+        Verifica si una trayectoria es posible. Si no ValueError
+
+        pag 80-81. of 'Trajectory planning for automatic machines and robots(2008)
         """
         dv = np.abs(v1 - v0)
         dq = np.abs(q1 - q0)
@@ -68,117 +71,167 @@ class SCurveProfile(VelocityProfile):
         time_to_reach_max_a = a_max/j_max
         time_to_set_set_speeds = np.sqrt(dv/j_max)
 
+        #Eq. 3.17
         Tj = min(time_to_reach_max_a, time_to_set_set_speeds)
 
+        # Si son iguales la aceleracion alcanza su maximo y existe segmento con jerk=0
+        #Eq. 3.18
         if Tj == time_to_reach_max_a:
             return dq > 0.5*(v0 + v1)*(Tj+dv/a_max)
-
         elif Tj < time_to_reach_max_a:
             return dq > Tj*(v0+v1)
-
         else:
             raise ValueError("Something went wrong")
+
 
     def _compute_maximum_speed_reached(self, q0, q1, v0, v1,
                                         v_max, a_max, j_max):
         """
-        For explanation look at page 79 of
-            'Trajectory planning for automatic machines and robots(2008)'
+        Case 1. V_lim = V_max
         """
 
-        #planning_logger.info("Computing maximum speed reached profile")
-
-        # Acceleration period
+        #Eq 3.19  Acceleration period
         if (v_max-v0)*j_max < a_max**2:
-            # a_max is not reached
+            #Eq 3.21 a_max is not reached
             Tj1 = np.sqrt((v_max-v0)/j_max)
             Ta = 2*Tj1
         else:
-            # a_max is reached
+            #Eq 3.22 a_max is reached
             Tj1 = a_max/j_max
             Ta = Tj1 + (v_max-v0)/a_max
 
-        # Deceleration period
+        #Eq 3.20 Deceleration period
         if (v_max-v1)*j_max < a_max**2:
-            # a_min is not reached
+            # Eq. 3.23 a_min is not reached
             Tj2 = np.sqrt((v_max-v1)/j_max)
             Td = 2*Tj2
         else:
-            # a_min is reached
+            #Eq 3.24 a_min is reached
             Tj2 = a_max/j_max
             Td = Tj2 + (v_max-v1)/a_max
 
+        # Determino duracion de segmento de V=cte.
+        #Eq 3.25
         Tv = (q1-q0)/v_max - (Ta/2)*(1+v0/v_max)-(Td/2)*(1+v1/v_max)
 
+        # Si Tv < 0 -> V_lim < V_max y debemos pasar a caso 2.
         if Tv < 0:
-            #self.logger.error("")
-            raise ValueError("Maximum velocity is not reached. "
-                                "Failed to plan trajectory")
+            raise ValueError("Maximum velocity is not reached")
 
         return Tj1, Ta, Tj2, Td, Tv
+
 
     def _compute_maximum_speed_not_reached(self, q0, q1, v0, v1,
                                             v_max, a_max, j_max):
         """
-        For explanation look at page 79 of
-            'Trajectory planning for automatic machines and robots(2008)'
+        Case 2. V_lim < V_max
+        No esta presente el segmento de V-cte.
         """
 
         # Assuming that a_max/a_min is reached
-        #planning_logger.info("Computing maximum speed not reached profile")
-
+        #Eq 3.26a
         Tj1 = Tj2 = Tj = a_max/j_max
         Tv = 0
 
+        #Eq 3.27
         v = (a_max**2)/j_max
         delta = ((a_max**4)/(j_max**2)) + 2*((v0**2)+(v1**2)) +\
             a_max*(4*(q1-q0)-2*(a_max/j_max)*(v0+v1))
 
+        #Eq 3.26b y 3.26c
         Ta = (v - 2*v0 + np.sqrt(delta))/(2*a_max)
         Td = (v - 2*v1 + np.sqrt(delta))/(2*a_max)
 
         if (Ta - 2*Tj < EPSILON) or (Td - 2*Tj < EPSILON):
-            raise ValueError("Maximum acceletaion is not reached. Failed to"
-                                " plan trajectory")
+            # En este caso es conveniente obtener los parametros con una solucion aprox.
+            raise ValueError("Max/min acceleration is not reached. Failed to plan trajectory")
 
         return Tj1, Ta, Tj2, Td, Tv
     
+
     def _scurve_search_planning(self, q0, q1, v0, v1, v_max, a_max,
-                                 j_max, l=0.99, max_iter=2000,
-                                 dt_thresh=0.01, T=None):
+                                j_max, l=0.99, max_iter=500,
+                                dt_thresh=0.01, T=None):
         """
-        Trying to achieve requirements with iteratively decreasing maximum
-            possible acceleration.
-
-        Look at 'Trajectory planning for automatic machines and robots(2008)'
+        Método para encontrar parámetros de trayectoria S con aceleración ajustada.
+        Es decir cuando a_lim < a_max siendo a_lim desconocida
         """
+        
+        current_a_max = a_max
+        iteration = 0
 
-        #lanning_logger.info("Starting search planning")
-
-        _a_max = a_max
-        it = 0
-
-        while (it < max_iter) and (_a_max > EPSILON):
+        while iteration < max_iter and current_a_max > 1e-9:
             try:
-                Tj1, Ta, Tj2, Td, Tv =\
-                    self.__compute_maximum_speed_not_reached(q0, q1, v0, v1,
-                                                             v_max, _a_max,
-                                                             j_max)
+                # 1. Calcular parámetros base
+                Tj1, Ta, Tj2, Td, Tv = self._compute_maximum_speed_not_reached(
+                    q0, q1, v0, v1, v_max, current_a_max, j_max)
 
-                if T is None:
-                    return Tj1, Ta, Tj2, Td, Tv
+                # 2. Manejar casos especiales inmediatamente
+                if Ta < 0 or Td < 0:
+                    return self._handle_special_cases(q0, q1, v0, v1, j_max, Tj1, Ta, Tj2, Td, Tv)
 
-                if abs(T - Ta - Td - Tv) <= dt_thresh:
-                    return Tj1, Ta, Tj2, Td, Tv
-                else:
-                    _a_max *= l
-                    it += 1
+                # 3. Validar condiciones de aceleración máxima
+                Tj = current_a_max / j_max
+                if (abs(Ta - 2*Tj) < 1e-9) or (abs(Td - 2*Tj) < 1e-9):
+                    raise ValueError("Ajuste necesario")
 
-            except ValueError:
-                it += 1
-                _a_max *= l
+                # 4. Validación de tiempo total si es requerido
+                if T is not None and abs(T - (Ta + Td + Tv)) > dt_thresh:
+                    raise ValueError("Ajuste temporal necesario")
 
-        raise ValueError("Failed to find appropriate a_max")
+                print(f"Solución encontrada con a_max = {current_a_max:.4f}")
+                return Tj1, Ta, Tj2, Td, Tv
+
+            except ValueError as e:
+                # 5. Reducción adaptativa de a_max con límite inferior seguro
+                current_a_max = max(current_a_max * l, 1e-9)
+                iteration += 1
+
+        # 6. Último intento con manejo especial de casos
+        try:
+            return self._handle_special_cases(q0, q1, v0, v1, j_max, 0, 0, 0, 0, 0)
+        except ValueError:
+            raise ValueError(f"No se encontró solución en {iteration} iteraciones. Último a_max: {current_a_max:.4e}")
+            
+        
+    def _handle_special_cases(self, q0, q1, v0, v1, j_max, Tj1, Ta, Tj2, Td, Tv):
+        """
+        Maneja casos donde Ta o Td son negativos, es decir cuando solo se necesita 1 fase
+        de aceleracion/desaceleracion.
+        """
+        delta_q = q1 - q0
+        sum_v = v0 + v1
+        
+        # Caso 1: Solo desaceleración (v0 > v1) Ta<0
+        if v0 > v1:
+            if abs(sum_v) < 1e-9:
+                raise ValueError("Suma de velocidades inválida")
+            
+            Td = 2 * delta_q / sum_v
+            sqrt_term = np.sqrt(j_max * (j_max * delta_q**2 + (v1 - v0) * sum_v**2))
+            Tj2 = (j_max * delta_q - sqrt_term) / (j_max * sum_v)
+            
+            if Tj2 < 1e-9 or Td < 2*Tj2:
+                raise ValueError("Parámetros inválidos")
+            
+            return 0.0, 0.0, Tj2, Td, 0.0
+
+        # Caso 2: Solo aceleración (v1 > v0) Td<0
+        elif v1 > v0:
+            if abs(sum_v) < 1e-9:
+                raise ValueError("Suma de velocidades inválida")
+            
+            Ta = 2 * delta_q / sum_v
+            sqrt_term = np.sqrt(j_max * (j_max * delta_q**2 + (v0 - v1) * sum_v**2))
+            Tj1 = (j_max * delta_q - sqrt_term) / (j_max * sum_v)
+            
+            if Tj1 < 1e-9 or Ta < 2*Tj1:
+                raise ValueError("Parámetros inválidos")
+            
+            return Tj1, Ta, 0.0, 0.0, 0.0
+
+        raise ValueError("Caso especial no manejable")
+    
 
     def _sign_transforms(self, q0, q1, v0, v1, v_max, a_max, j_max):
         """
@@ -197,6 +250,7 @@ class SCurveProfile(VelocityProfile):
         vs1 = (s+1)/2
         vs2 = (s-1)/2
 
+        #Eq 3.31 y 3.32
         _q0 = s*q0
         _q1 = s*q1
         _v0 = s*v0
@@ -206,13 +260,55 @@ class SCurveProfile(VelocityProfile):
         _j_max = vs1*j_max + vs2*j_min
 
         return _q0, _q1, _v0, _v1, _v_max, _a_max, _j_max
-    
+
+
+    def compute_parameters(self, q0, q1, v0, v1, v_max, a_max, j_max):
+        """
+        Computes s-curve trajectory parameters which are:
+            Tj1     --- non-zero constant jerk period while accelerating
+            Ta      --- total acceleration period time
+            Tj2     --- non-zero constant jerk period while decelerating
+            Td      --- total deceleration time
+            Tv      --- constant speed time
+        """
+        # Si la trayectoria es posible
+        if self._scurve_check_possibility(q0, q1, v0, v1, v_max, a_max, j_max):
+            # Calcula cambio de signo de condiciones iniciales
+            q0, q1, v0, v1, v_max, a_max, j_max = self._sign_transforms(q0, q1, v0, v1, v_max, a_max, j_max)
+            
+            # Asumiendo que se alcanza v_max y a_max
+            try:
+                Tj1, Ta, Tj2, Td, Tv =\
+                    self._compute_maximum_speed_reached(q0, q1, v0, v1,
+                                                         v_max, a_max, j_max)
+            except ValueError as e:
+                # Error si Tv<0
+                print(f"Error. {e}")
+                try:
+                    Tj1, Ta, Tj2, Td, Tv =\
+                        self._scurve_search_planning(q0, q1, v0, v1,
+                                                                 v_max, a_max,
+                                                                 j_max)
+                except ValueError as e:
+                    # Error si no se encontro solucion iterando
+                    print(f"Error. {e}")
+
+            return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
+
+        else:
+            raise TypeError("Trajectory is not feasible")
+
+
+
+
+
     def _point_sign_transform(self, q0, q1, p):
         """
         Transforms point back to the original sign
         """
         s = np.sign(q1-q0)
         return s*p
+
 
     def _get_trajectory_func(self, Tj1, Ta, Tj2, Td, Tv,
                               q0, q1, v0, v1, v_max, a_max, j_max):
@@ -291,6 +387,7 @@ class SCurveProfile(VelocityProfile):
 
         return trajectory
 
+
     def _get_trajectory_function(self, q0, q1, v0, v1, v_max, a_max, j_max,
                                   Tj1, Ta, Tj2, Td, Tv):
         """
@@ -307,51 +404,15 @@ class SCurveProfile(VelocityProfile):
 
         return sign_back_transformed
 
-    def _scurve_profile_no_opt(self, q0, q1, v0, v1, v_max, a_max, j_max):
-        """
-        Computes s-curve trajectory parameters which are:
-            Tj1     --- non-zero constant jerk period while accelerating
-            Ta      --- total acceleration period time
-            Tj2     --- non-zero constant jerk period while decelerating
-            Td      --- total deceleration time
-            Tv      --- constant speed time
-        """
-
-        if self._scurve_check_possibility(q0, q1, v0, v1, v_max, a_max, j_max):
-            try:
-                Tj1, Ta, Tj2, Td, Tv =\
-                    self._compute_maximum_speed_reached(q0, q1, v0, v1,
-                                                         v_max, a_max, j_max)
-            except ValueError as e:
-                print(f"Error. {e}")
-
-                try:
-                    Tj1, Ta, Tj2, Td, Tv =\
-                        self._compute_maximum_speed_not_reached(q0, q1, v0, v1,
-                                                                 v_max, a_max,
-                                                                 j_max)
-                except ValueError as e:
-                    print(f"Error. {e}")
-
-                    try:
-                        Tj1, Ta, Tj2, Td, Tv =\
-                            self._scurve_search_planning(q0, q1, v0, v1, v_max,
-                                                          a_max, j_max)
-                    except ValueError as e:
-                        print(f"Error. {e}")
-                        raise ValueError("Trajectory is infeasible")
-
-            return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
-
-        else:
-            raise TypeError("Trajectory is not feasible")
 
     def _put_params(self, params_list, params, dof):
         for i in range(len(params_list)):
             params_list[i][dof] = params[i]
 
+
     def _get_dof_time(self, params_list, dof):
         return params_list[1][dof] + params_list[3][dof] + params_list[4][dof]
+
 
     def _get_traj_params_containers(self, sh):
         T = np.zeros(sh)
@@ -362,6 +423,7 @@ class SCurveProfile(VelocityProfile):
         Tv = np.zeros(sh)
 
         return T, Tj1, Ta, Tj2, Td, Tv
+
 
     def _plan_trajectory_1D(self, q0, q1, v0, v1, v_max, a_max, j_max, T=None):
         """
@@ -378,9 +440,10 @@ class SCurveProfile(VelocityProfile):
 
         if T is None:
             # Calculo la trayectoria para el tiempo minimo
-            res = self._scurve_profile_no_opt(*zipped_args)
+            res = self.compute_parameters(*zipped_args)
 
         return res
+
 
     def plan_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max, t=None):
         """
@@ -482,28 +545,51 @@ class SCurveProfile(VelocityProfile):
 
 
 if __name__ == "__main__":
+    s_curve = SCurveProfile()
 
-    # Para una articulacion
-    #q0 = [-2]
-    #q1 = [20]
-    #v0 = [1]
-    #v1 = [5]
+    print(f"\n -- Example 3.9 --")
+    print("Tested 'compute_max_speed_reached' \n")
+    q0 = 0
+    q1 = 10
+    v0 = 1
+    v1 = 0
+    v_max = 5
+    a_max = 10
+    j_max = 30
 
-    # Para 2 articulaciones
-    q0 = [-2,]
-    q1 = [20,]
-    v0 = [1,]
-    v1 = [5,]
+    parameters = s_curve.compute_parameters(q0,q1,v0,v1,v_max,a_max,j_max)
 
-    # Restricciones cinematicas
-    v_max = 20
-    a_max = 15
-    j_max = 100
+    print(parameters)
+    print(f"\n -- Example 3.10 --")
+    print("Tested 'compute_max_speed_not_reached' \n")
 
-    planner = SCurveProfile()
-    trajectory_1 = planner.plan_trajectory(q0, q1, v0, v1, v_max, a_max, j_max)
-    print(trajectory_1)
+    v_max = 10
 
-    print(trajectory_1.time)
-    print(trajectory_1.dof)
-    print(trajectory_1.debug)
+    Tj1, Ta, Tj2, Td, Tv = s_curve.compute_parameters(q0,q1,v0,v1,v_max,a_max,j_max)
+
+    print(f"Ta={round(Ta,4)}, Tv={round(Tv,4)}, Td={round(Td,4)}, Tj1={round(Tj1,4)}, Tj2={round(Tj2,4)} ")
+
+    print(f"\n -- Example 3.11 --")
+    print("Tested 'max_acceleration_not_reached' \n")
+
+    v0 = 7
+
+    Tj1, Ta, Tj2, Td, Tv = s_curve.compute_parameters(q0,q1,v0,v1,v_max,a_max,j_max)
+
+    print(f"Ta={round(Ta,4)}, Tv={round(Tv,4)}, Td={round(Td,4)}, Tj1={round(Tj1,4)}, Tj2={round(Tj2,4)} ")
+
+
+    print(f"\n -- Example 3.12 --")
+    print("Tested 'max_acceleration_not_reached and Special Case 1 (Ta<0)' \n")
+
+    q0 = 0
+    q1 = 10
+    v0 = 7.5
+    v1 = 0
+    v_max = 10
+    a_max = 10
+    j_max = 30
+
+    Tj1, Ta, Tj2, Td, Tv = s_curve.compute_parameters(q0,q1,v0,v1,v_max,a_max,j_max)
+
+    print(f"Ta={round(Ta,4)}, Tv={round(Tv,4)}, Td={round(Td,4)}, Tj1={round(Tj1,4)}, Tj2={round(Tj2,4)} ")
