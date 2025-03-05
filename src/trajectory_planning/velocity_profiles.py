@@ -16,8 +16,6 @@ src_root = Path(__file__).resolve().parent.parent
 print(src_root)
 sys.path.append(str(src_root))
 
-from trajectory_planning.trajectory_planner import JointConstraints
-
 
 # CONSTANTES
 ACCELERATION_ID = 0
@@ -559,7 +557,7 @@ if __name__ == "__main__":
 
     my_trayectory = s_curve._trajectory_function
     my_trayectory
-    
+
     print(f"Max. Vel alcanzada = {s_curve.characteristics.achieved_max_velocity}")
     print(f"Aceleracion limite = {s_curve.characteristics.achieved_max_acceleration}")
     print(f"Desaceleracion limite = {s_curve.characteristics.achieved_max_deceleration}")
@@ -584,4 +582,7 @@ if __name__ == "__main__":
     print(f"Aceleracion limite = {s_curve.characteristics.achieved_max_acceleration}")
     print(f"Desaceleracion limite = {s_curve.characteristics.achieved_max_deceleration}")
     
-    
+    t = np.linspace(0,2.5,100)
+    for t in t:
+        print(s_curve.get_state(t))
+
