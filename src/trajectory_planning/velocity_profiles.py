@@ -4,7 +4,6 @@ https://github.com/nameofuser1/py-scurve/tree/master
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
@@ -16,6 +15,9 @@ src_root = Path(__file__).resolve().parent.parent
 print(src_root)
 sys.path.append(str(src_root))
 
+from trajectory_planning.utils.data_classes import JointConstraints
+from trajectory_planning.utils.data_classes import TrajectoryCharacteristics
+
 
 # CONSTANTES
 ACCELERATION_ID = 0
@@ -25,24 +27,7 @@ POSITION_ID = 2
 OPTIMIZER_THRESHOLD = 0.01
 EPSILON = 0.0001
 
-
-@dataclass
-class JointConstraints:
-    """Clase contenedora de restricciones cinemáticas de una articulación"""
-    max_velocity: float
-    max_acceleration: float
-    max_jerk: float
-
-@dataclass
-class TrayectoryCharacteristics:
-    """Caracteristicas claves de la trayectoria calculada"""
-    total_time: float
-    achieved_max_acceleration: float
-    achieved_max_deceleration: float
-    achieved_max_velocity: float
-
-
-class VelocityProfile(ABC):
+class TrajectoryProfile(ABC):
     """
     Interfaz abstracta para perfiles de velocidad.
     Gestiona restricciones y parametros comunes
@@ -51,7 +36,7 @@ class VelocityProfile(ABC):
         self._constraints = constraints
         self._parameters = None
         self._trajectory_function = None
-        self._characteristics: Optional[TrayectoryCharacteristics] = None
+        self._characteristics: Optional[TrajectoryCharacteristics] = None
 
     @property
     def constraints(self) -> JointConstraints:
@@ -64,8 +49,13 @@ class VelocityProfile(ABC):
         self._clear_parameters()
 
     @property
-    def characteristics(self) -> Optional[TrayectoryCharacteristics]:
+    def characteristics(self) -> Optional[TrajectoryCharacteristics]:
         return self._characteristics
+
+    @property
+    def duration(self) -> float:
+        """Duracion total del perfil"""
+        return self.characteristics.total_time
 
     @abstractmethod
     def plan_trajectory(self, q0, q1, v0, v1):
@@ -93,6 +83,7 @@ class VelocityProfile(ABC):
             raise ValueError("Trayectoria no calculada")
         return self._trajectory_function(t)
     
+    #! Metodos internos
     def _validate_constraints(self, constraints: JointConstraints):
         """Valida restricciones al asignarlas"""
         if constraints.max_jerk <= 0:
@@ -104,7 +95,7 @@ class VelocityProfile(ABC):
         self._parameters = None
 
 
-class SCurveProfile(VelocityProfile):
+class SCurveProfile(TrajectoryProfile):
     """
     Implementacion del perfil S-Curve
     """
@@ -338,6 +329,7 @@ class SCurveProfile(VelocityProfile):
             return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
 
         else:
+            print(f"Error al calcular parametros. S-Curve")
             raise TypeError("Trajectory is not feasible")
 
 
@@ -397,7 +389,7 @@ class SCurveProfile(VelocityProfile):
         v_lim = v0 + (Ta-Tj1)*a_lim_a
 
         # Actualizo variable interna de caracteristicas clave
-        self._characteristics = TrayectoryCharacteristics(
+        self._characteristics = TrajectoryCharacteristics(
             total_time = T,
             achieved_max_acceleration = a_lim_a,
             achieved_max_deceleration = a_lim_d,
@@ -544,6 +536,7 @@ if __name__ == "__main__":
     print(f"Aceleracion limite = {s_curve.characteristics.achieved_max_acceleration}")
     print(f"Desaceleracion limite = {s_curve.characteristics.achieved_max_deceleration}")
 
+
     print(f"\n -- Example 3.12 --")
     print("Tested 'max_acceleration_not_reached and Special Case 1 (Ta<0)' \n")
     q0 = 0
@@ -573,7 +566,7 @@ if __name__ == "__main__":
     q0 = 0
     q1 = 10
     v0 = 0
-    v1 = 0
+    v1 = 2
     s_curve.plan_trajectory(q0, q1, v0, v1)
     print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
 
@@ -581,8 +574,24 @@ if __name__ == "__main__":
     print(f"Max. Vel alcanzada = {s_curve.characteristics.achieved_max_velocity}")
     print(f"Aceleracion limite = {s_curve.characteristics.achieved_max_acceleration}")
     print(f"Desaceleracion limite = {s_curve.characteristics.achieved_max_deceleration}")
-    
-    t = np.linspace(0,2.5,100)
-    for t in t:
-        print(s_curve.get_state(t))
+    print(f"Tiempo Total = {s_curve.characteristics.total_time}")
+
+
+    q0 = 0
+    q1 = 2
+    v0 = 0
+    v1 = 1
+    s_curve.plan_trajectory(q0, q1, v0, v1)
+    print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
+
+    print(f"Ultima Trayectoria:\n {s_curve._trajectory_function}")
+    print(f"Max. Vel alcanzada = {s_curve.characteristics.achieved_max_velocity}")
+    print(f"Aceleracion limite = {s_curve.characteristics.achieved_max_acceleration}")
+    print(f"Desaceleracion limite = {s_curve.characteristics.achieved_max_deceleration}")
+    print(f"Tiempo Total = {s_curve.characteristics.total_time}")
+
+    # Para mostrar toda la trayectoria
+    #t = np.linspace(0,s_curve.characteristics.total_time, 100)
+    #for t in t:
+    #    print(s_curve.get_state(t))
 

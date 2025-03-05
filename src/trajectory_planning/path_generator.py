@@ -20,11 +20,17 @@ class PathGenerator:
             * path (np.array): Matriz de Nx7 de poses
         """
         self.robot = robot
+
         self.original_path = path
         self.current_path = path.copy()
 
         self.original_joint_path = self.cartasian_to_joint_space(self.original_path)
         self.current_joint_path = self.original_joint_path.copy()
+
+        # NOTA. Estos parametros internos son necesarios como variable a optimizar
+        # con algoritmos de busqueda de trayectoria optima
+        self.original_path_lenght = self.calc_path_length(self.original_path)
+        self.current_path_lenght = self.original_path_lenght.copy()
 
     def cartasian_to_joint_space(self, cartasian_path):
         """

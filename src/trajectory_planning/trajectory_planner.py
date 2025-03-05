@@ -1,7 +1,6 @@
 import numpy as np
-from dataclasses import dataclass
 from typing import Callable, Optional
-
+from scipy.interpolate import CubicSpline
 import sys
 from pathlib import Path
 
@@ -10,119 +9,195 @@ src_root = Path(__file__).resolve().parent.parent
 print(src_root)
 sys.path.append(str(src_root))
 
-from trajectory_planning.velocity_profiles import VelocityProfile
-
-@dataclass
-class JointState:
-    """Estado completo de una articulación en un instante t"""
-    time: float
-    position: float
-    velocity: float
-    acceleration: float
-
-@dataclass
-class RobotPose:
-    """Estado completo del robot (todas articulaciones) en un instante t"""
-    time: float
-    joints: dict[int, JointState]  # {joint_id: JointState}
-
-# Structured dtype para trayectorias individuales
-trajectory_dtype = np.dtype([
-    ('time', 'f8'),
-    ('position', 'f8'),
-    ('velocity', 'f8'),
-    ('acceleration', 'f8')
-])
-
-
+from trajectory_planning.utils.data_classes import JointConstraints
+from trajectory_planning.utils.data_classes import SegmentProfile
+from trajectory_planning.utils.data_classes import JointState
+from trajectory_planning.velocity_profiles import SCurveProfile
+from trajectory_planning.polinomios import QuinticPolinomial
 
 class TrajectoryPlanner():
     """
     Coordina multiples articulaciones y puntos de paso.
-    Utiliza perfiles de velocidad para cada articulacion
     """
-    def __init__(self, joints_path: np.ndarray, profiles: list[VelocityProfile]):
-        self.joints_path = joints_path
-        self.profiles = profiles
-        self.trajectories: dict[int, np.ndarray] = {}
-        self.via_points: list[RobotPose]
-        
-    def compute_trajectories(self):
-        """Calcula trayectorias para todas las articulaciones"""
-        for joint_id, profile in enumerate(self.profiles):
-            self._compute_joint_trajectory(joint_id, profile)
+    def __init__(self, joints_constraints: dict[int, JointConstraints]):
+        """
+        Argumentos:
+            * joints_constraints: Diccionario con restriccion por articulacion
+                {id: JointConstraints}
+        """
+        self.quintic = QuinticPolinomial()
 
-    def _compute_joint_trajectory(self, joint_id: int, profile: VelocityProfile):
-        """Calcula y almacena la trayectoria para una articulación"""
-        joint_data = []
-        
-        # Calcular entre cada par de via points
-        for i in range(len(self.joints_path)-1):
-            q0, q1 = self.joints_path[i, joint_id], self.joints_path[i+1, joint_id]
-            profile.plan_trajectory(q0, q1, v0=0, v1=0)
-            
-            # Generar serie temporal
-            time_samples = np.linspace(0, profile.characteristics.total_time, 100)
-            joint_segment = np.zeros(len(time_samples), dtype=trajectory_dtype)
-            
-            for idx, t in enumerate(time_samples):
-                state = profile.get_state(t)
-                #joint_segment[idx] = (t, state[POSITION_ID], state[SPEED_ID], state[ACCELERATION_ID])
-            
-            joint_data.append(joint_segment)
-        
-        self.trajectories[joint_id] = np.concatenate(joint_data)
+        self.joints_constraints = joints_constraints
+        self.joint_profiles: dict[int, list[SegmentProfile]] = {} # joint_id: list(segmentos)
+        self.full_trajectory: dict[int, list[JointState]] = {}
+        self.sync_timeline: Optional[np.ndarray] = None
 
-    def get_combined_trajectory(self) -> np.ndarray:
-        """Combina todas las articulaciones en estructura unificada"""
-        times = self._get_synchronized_times()
-        n_samples = len(times)
-        n_joints = len(self.profiles)
-        
-        #combined = np.zeros(n_samples)
-        
-        for i, t in enumerate(times):
-            positions = np.zeros(n_joints)
-            velocities = np.zeros(n_joints)
-            accelerations = np.zeros(n_joints)
-            
-            for joint_id in range(n_joints):
-                state = self._get_interpolated_state(joint_id, t)
-                positions[joint_id] = state['position']
-                velocities[joint_id] = state['velocity']
-                accelerations[joint_id] = state['acceleration']
-                
-            #combined[i] = (t, positions, velocities, accelerations)
-        
-        #return combined
+    def process_joints_path(self, joints_path: np.ndarray) -> None:
+        """
+        Procesa la matriz completa de trayectorias articulares creando
+        y agregando joint_profiles como list[SegmentProfile]
 
+        Argumentos:
+            * joints_path: Matriz (m x n) donde:
+                - m: Numero de puntos de trayectoria
+                - n: Numero de articulaciones (debe coincidir con joint_constraints)
+        """
+        self._validate_joints_path(joints_path)
+
+        # Separar por articulaciones y crear perfiles
+        for joint_id in self.joints_constraints.keys():
+            joint_positions = joints_path[:, joint_id]  # Toma una columna a la vez
+            
+            # Crea perfil de velocidades para esa articulacion
+            self.joint_profiles[joint_id] = self._create_joint_profile(
+                positions=joint_positions,
+                constraints=self.joints_constraints[joint_id]
+            )
+
+        #! Sincronizar tiempos entre articulaciones
+        #self._synchronize_profiles()
+        #! Optimizacion global
+        #self._optimize_transitions()
+
+    # ================= Metodos Internos ==================
+    def _validate_joints_path(self, path: np.ndarray) -> None:
+        """Valida la estructura de la matriz joints_path"""
+        if path.ndim != 2:
+            raise ValueError("joints_path debe ser matriz 2D")
+            
+        n_joints = len(self.joints_constraints)
+        if path.shape[1] != n_joints:
+            raise ValueError(f"Número de columnas en joints_path ({path.shape[1]}) no coincide con articulaciones definidas ({n_joints})")
     
-    def add_via_point(self, point: RobotPose):
-        """Añade un punto de paso con restricciones"""
-        self.via_points.append(point)
-        self._optimize_around_via_points()
 
-    def _optimize_around_via_points(self):
-        """Ajusta trayectorias para cumplir con via points"""
-        # 1. Alinear marcos temporales
-        # 2. Aplicar filtros de suavizado
-        # 3. Ajustar perfiles de velocidad
-        # 4. Validar restricciones cinemáticas
+    def _create_joint_profile(self, positions: np.ndarray, constraints: JointConstraints) -> list[SegmentProfile]:
+        """
+        Crea perfil de velocidades completo para una articulación individual
         
-    def _apply_singularity_filters(self):
-        """Filtrado especial para zonas de singularidad"""
-        # Implementar filtros de:
-        # - Suavizado de aceleración
-        # - Limitación de jerk
-        # - Ajuste de velocidad
+        Argumentos:
+            * positions: lista de posiciones angulares
+            * constraints: objeto JointConstraints particular de articulacion
 
-    def _get_synchronized_times(self) -> np.ndarray:
-        """Obtiene vector temporal común para todas las articulaciones"""
-        all_times = [t['time'] for traj in self.trajectories.values() for t in traj]
-        return np.unique(np.sort(all_times))
+        Retorna:
+
+        """
+        segments = []
     
-    def _get_interpolated_state(self, joint_id: int, t: float) -> np.ndarray:
-        """Obtiene estado interpolado para tiempo t"""
-        traj = self.trajectories[joint_id]
-        idx = np.searchsorted(traj['time'], t, side='right') - 1
-        return traj[idx]
+        # Calcular velocidades iniciales estimadas
+        estimated_velocities = self._estimate_initial_velocities(positions, constraints)
+        print(f"Estimated Velocities = {estimated_velocities}")
+
+        # Generar segmentos entre puntos consecutivos
+        for i in range(len(positions)-1):
+            # Obtengo posiciones y velocidades de siguiente segmento
+            q0, q1 = positions[i], positions[i+1]
+            v0, v1 = estimated_velocities[i], estimated_velocities[i+1]
+            
+            try:
+                # Crear perfil de velocidad
+                profile = SCurveProfile(constraints=constraints)
+                # Calcular parametros y obtener trayectoria
+                profile.plan_trajectory(q0, q1, v0, v1)
+
+                # Agregar segmento a lista de segmentos
+                segments.append(SegmentProfile(
+                    start_state=JointState(0, q0, v0, 0),
+                    end_state=JointState(profile.duration, q1, v1, 0),
+                    duration=profile.duration,
+                    profile_type=SCurveProfile,
+                    constraints=constraints
+                ))
+            except ValueError as e:
+                print(f"Error en segmento {i}: {str(e)}")
+        
+        return segments
+    
+
+    def _estimate_initial_velocities(self, positions: np.ndarray, constraints: JointConstraints) -> np.ndarray:
+        """
+        Estima velocidades iniciales usando splines quintics y tiempo basado en longitud
+        de la trayectoria.
+            
+            Argumentos:
+                * positions: lista de posiciones de una articulacion [J0, J1, Jn]
+                * constraints: restricciones cinematicas
+        """
+        n = len(positions)
+        if n < 2:
+            return np.zeros_like(positions)
+        
+        segment_times = []
+
+        for i in range(n-1):
+            # Calcular longitud acumulada de segmento
+            delta_q = abs(positions[i+1] - positions[i])
+            # Calcular tiempo teorico (sin considerar jerk) de segmento
+            t = self._calculate_segment_time(delta_q, constraints)
+            segment_times.append(t)
+
+        # 2. Generar vector temporal acumulado
+        time_vector = np.zeros(n)
+        for i in range(1, n):
+            # Agrego tiempo anterior mas tiempo de nuevo
+            time_vector[i] = time_vector[i-1] + segment_times[i-1]
+
+        # 3. Crear spline Quintic con condiciones de frontera C2
+        # Aceleracion=0 en bordes
+        cs = CubicSpline(time_vector, positions, bc_type=((2, 0), (2, 0)))
+        print(f"Coeficientes interpolados\n {cs}")
+
+        # 4. Calcular velocidades en cada punto
+        velocities = cs(time_vector, 1)  # Primera derivada
+        velocities = np.clip(velocities, -constraints.max_velocity, constraints.max_velocity)
+
+        for i in range(1, n):
+            delta_q = abs(positions[i] - positions[i-1])
+            max_vel = min(
+                np.sqrt(2 * constraints.max_acceleration * delta_q),
+                constraints.max_velocity
+            )
+            velocities[i] = np.clip(velocities[i], -max_vel, max_vel)
+
+        return velocities
+    
+
+
+
+    def _calculate_segment_time(self, delta_q: float, constraints: JointConstraints) -> float:
+        """Calcula tiempo mínimo para un segmento usando ecuaciones S-Curve"""
+        # Tiempo sin jerk (modelo trapezoidal)
+        t_accel = (constraints.max_velocity - 0) / constraints.max_acceleration
+        dist_accel = 0.5 * constraints.max_acceleration * t_accel**2
+        if delta_q <= 2 * dist_accel:  # Caso sin fase de velocidad constante
+            t_trap = 2 * np.sqrt(delta_q / constraints.max_acceleration)
+        else:
+            t_trap = (delta_q / constraints.max_velocity) + (constraints.max_velocity / constraints.max_acceleration)
+
+        # Tiempo con jerk (modelo S-Curve)
+        t_jerk = (constraints.max_acceleration / constraints.max_jerk)
+        t_scurve = (delta_q / constraints.max_velocity) + 1.5 * t_jerk
+
+        return max(t_trap, t_scurve)
+
+if __name__ == "__main__":
+    # Joints_path de prueba
+    joints_path = np.array([
+        [0, 0],
+        [6, 4],
+        [10, 2],
+        [6, 6],
+        [0, 8]
+    ])
+
+    print(joints_path)
+
+    # Configurar restricciones para 2 articulaciones
+    joints_constraints = {
+        0: JointConstraints(max_velocity=1, max_acceleration=1, max_jerk=3),
+        1: JointConstraints(max_velocity=1, max_acceleration=1, max_jerk=3)
+    }
+
+    planner = TrajectoryPlanner(joints_constraints)
+    planner.process_joints_path(joints_path=joints_path)
+
+    print(planner.joint_profiles.keys)

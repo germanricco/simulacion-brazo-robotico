@@ -2,10 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class QuinticPolinomial():
-    def __init__(self, max_vel: float, max_acc: float, max_jerk: float):
-        self.max_vel = max_vel
-        self.max_acc = max_acc
-        self.max_jerk = max_jerk
+    def __init__(self):
+        pass
 
     def compute_polynomial(self,initial_pos,initial_vel,initial_acc,
                            final_pos,final_vel,final_acc,
@@ -49,11 +47,68 @@ class QuinticPolinomial():
         ad = 2*a[2]*c + 6*a[3]*t + 12*a[4]*t**2 + 20*a[5]*t**3
 
         return t, qd, vd, ad
+    
+
+    def interpolation(self, times: np.ndarray, positions: np.ndarray):
+        """
+        Interpola el spline Quintic a partir con continuidad C2
+        entre multiples puntos
+
+        Argumentos:
+            * times: vector de tiempos (n elementos)
+            * positions: vector de posiciones (n elementos)
+
+        Retorna:
+            Matriz de coeficientes (n-1 x 6) por segmento
+        """
+
+        n = len(positions)
+        if n != len(times):
+            raise ValueError("Los vectores de tiempo y posición deben tener el mismo tamaño")
+        if n < 2:
+            raise ValueError("Se requieren al menos 2 puntos para interpolación")
+        
+        num_segments = n - 1
+        total_equations = 6 * num_segments
+
+        A = np.zeros((total_equations, total_equations))
+        b = np.zeros(total_equations)
+        
+        # Construir sistema de ecuaciones
+        for i in range(n-1):
+            t0 = times[i]
+            tf = times[i+1]
+            dt = tf - t0
+            
+                        # Condiciones de frontera del segmento
+            A = np.array([
+                [1, t0, t0**2, t0**3, t0**4, t0**5],    # Posición inicial
+                [0, 1, 2*t0, 3*t0**2, 4*t0**3, 5*t0**4], # Velocidad inicial
+                [0, 0, 2, 6*t0, 12*t0**2, 20*t0**3],     # Aceleración inicial
+                [1, tf, tf**2, tf**3, tf**4, tf**5],     # Posición final
+                [0, 1, 2*tf, 3*tf**2, 4*tf**3, 5*tf**4], # Velocidad final
+                [0, 0, 2, 6*tf, 12*tf**2, 20*tf**3]      # Aceleración final
+            ])
+
+            b = np.array([
+                positions[i],  # Posición inicial
+                0,             # Velocidad inicial = 0
+                0,             # Aceleración inicial = 0
+                positions[i+1],# Posición final
+                0,             # Velocidad final = 0
+                0              # Aceleración final = 0
+            ])
+
+        # Resolver sistema lineal
+        try:
+            coeffs = np.linalg.solve(A, b)
+        except np.linalg.LinAlgError:
+            raise RuntimeError("Sistema singular: Verifique los datos de entrada")
+
+        return coeffs
+
 
 if __name__ == "__main__":
-    max_vel = 1
-    max_acc = 0.8
-    max_jerk = 0.4
 
     t0 = 0.0
     tf = 1.0
@@ -64,11 +119,12 @@ if __name__ == "__main__":
     v1 = 4.0
     ac1 = 0.0
 
-    quintic = QuinticPolinomial(max_vel=max_vel,
-                                max_acc=max_acc,
-                                max_jerk=max_jerk)
+    quintic = QuinticPolinomial()
     
     t_traj, qd_traj, vd_traj, ad_traj = quintic.compute_polynomial(q0,v0,ac0,q1,v1,ac1,t0,tf)
+
+    coef=quintic.interpolation([0,1], [0,2])
+    print(coef)
 
     # --- Graficar las trayectorias utilizando matplotlib ---
     fig, ax = plt.subplots(3, 1, figsize=(8, 10)) # Crear una figura con 3 subplots en vertical

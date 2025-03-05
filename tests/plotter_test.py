@@ -68,6 +68,7 @@ if safety_monitor.verify_tcp_path(original_path[:,:3]):
     current_joint_path = path_generator.current_joint_path
     print(f"Posicion 5 de current joint path:\n {current_joint_path[5]}")
     print(path_generator.original_joint_path)
+    print(f"Longitud de Path = {path_generator.original_path_lenght}")
 
     if safety_monitor.verify_full_body(current_joint_path):
         print(f"El cuerpo no colisiona con las zonas prohibidas")
