@@ -11,6 +11,7 @@ sys.path.append(str(src_root))
 
 from trajectory_planning.utils.data_classes import JointConstraints
 from trajectory_planning.utils.data_classes import SegmentProfile
+from trajectory_planning.utils.data_classes import SegmentConstraints
 from trajectory_planning.utils.data_classes import JointState
 from trajectory_planning.velocity_profiles import SCurveProfile
 from trajectory_planning.polinomios import QuinticPolinomial
@@ -25,12 +26,15 @@ class TrajectoryPlanner():
             * joints_constraints: Diccionario con restriccion por articulacion
                 {id: JointConstraints}
         """
-        self.quintic = QuinticPolinomial()
-
         self.joints_constraints = joints_constraints
+        self.quintic = QuinticPolinomial()
+        
         self.joint_profiles: dict[int, list[SegmentProfile]] = {} # joint_id: list(segmentos)
         self.full_trajectory: dict[int, list[JointState]] = {}
         self.sync_timeline: Optional[np.ndarray] = None
+
+        self._current_joint_ID: int
+        self._current_segment_ID: int
 
     def process_joints_path(self, joints_path: np.ndarray) -> None:
         """
@@ -46,6 +50,9 @@ class TrajectoryPlanner():
 
         # Separar por articulaciones y crear perfiles
         for joint_id in self.joints_constraints.keys():
+            # Actualizo joint ID
+
+            self._current_joint_ID = joint_id
             joint_positions = joints_path[:, joint_id]  # Toma una columna a la vez
             
             # Crea perfil de velocidades para esa articulacion
@@ -79,7 +86,7 @@ class TrajectoryPlanner():
             * constraints: objeto JointConstraints particular de articulacion
 
         Retorna:
-
+            segments = list[SegmentProfile]
         """
         segments = []
     
@@ -87,29 +94,16 @@ class TrajectoryPlanner():
         estimated_velocities = self._estimate_initial_velocities(positions, constraints)
         print(f"Estimated Velocities = {estimated_velocities}")
 
-        # Generar segmentos entre puntos consecutivos
+        # Generar lista de segmentos para todo el perfil
         for i in range(len(positions)-1):
+            self._current_segment_ID = i
             # Obtengo posiciones y velocidades de siguiente segmento
             q0, q1 = positions[i], positions[i+1]
             v0, v1 = estimated_velocities[i], estimated_velocities[i+1]
-            
-            try:
-                # Crear perfil de velocidad
-                profile = SCurveProfile(constraints=constraints)
-                # Calcular parametros y obtener trayectoria
-                profile.plan_trajectory(q0, q1, v0, v1)
 
-                # Agregar segmento a lista de segmentos
-                segments.append(SegmentProfile(
-                    start_state=JointState(0, q0, v0, 0),
-                    end_state=JointState(profile.duration, q1, v1, 0),
-                    duration=profile.duration,
-                    profile_type=SCurveProfile,
-                    constraints=constraints
-                ))
-            except ValueError as e:
-                print(f"Error en segmento {i}: {str(e)}")
-        
+            segment = self.generate_segment(q0, q1, v0, v1)
+            segments.append(segment)
+            
         return segments
     
 
@@ -160,6 +154,44 @@ class TrajectoryPlanner():
 
         return velocities
     
+
+    def generate_segment(self, q0: float, q1: float, v0: float, v1: float, constraints: JointConstraints) -> SegmentProfile:
+        """
+        
+        """
+        try:
+            # Crear perfil de velocidad
+            profile = SCurveProfile(constraints=constraints)
+            # Calcular parametros y obtener trayectoria
+            profile.plan_trajectory(q0, q1, v0, v1)
+
+            return SegmentProfile(
+                # MetaData
+                segment_id = self._current_segment_ID,
+                joint_id = self._current_joint_ID,
+                # Restricciones del segmento
+                constraints=SegmentConstraints(
+                    q_start=q0,
+                    q_end=q1,
+                    v_start=v0,
+                    v_end=v1,
+                    jerk_max=constraints.max_jerk,
+                    accel_max=constraints.max_acceleration,
+                    vel_max=constraints.max_velocity
+                ),
+                # Parametros temporales de trayectoria
+                Tj1 = profile._parameters[0],
+                Ta = profile._parameters[1],
+                Tj2 = profile._parameters[2],
+                Td = profile._parameters[3],
+                Tv = profile._parameters[4],
+                
+                trajectory_func= profile._trajectory_function
+
+            )
+
+        except ValueError as e:
+            print(f"Error al generar segmento.")
 
 
 
