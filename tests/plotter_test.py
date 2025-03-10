@@ -88,7 +88,7 @@ plotter.add_cuboid(cuboide_2, "Zona Prohibida", "red")
 plotter.add_cuboid(cuboide_3, "Zona Segura 2", "green")
 plotter.add_cuboid(cuboide_4, "Zona Prohibida 2", "red")
 
-plotter.add_trajectory(original_path, "Trayectoria", "black")
+plotter.add_path(original_path, "Trayectoria", "black")
 
 plotter.customize_plot(title="Test Plotter", legend=False, equal_aspect=False)
 plotter.show_plot()
