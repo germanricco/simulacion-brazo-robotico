@@ -39,9 +39,9 @@ class Plotter:
         # Creo una lista para los elementos añadidos
         self.added_elements = []
     
-    def add_trajectory(self,
-                       trajectory,
-                       label="Trajectory",
+    def add_path(self,
+                       path,
+                       label="path",
                        color='blue',
                        linestyle='-',
                        marker=None):
@@ -49,26 +49,26 @@ class Plotter:
         Añade una trayectoria al plot.
 
         Parámetros:
-            * trajectory (np.array): Array de NumPy con los puntos de la trayectoria.
+            * path (np.array): Array de NumPy con los puntos de la trayectoria.
                                     Forma: [[x0, y0], [x1, y1], ...] o [[x0, y0, z0], [x1, y1, z1], ...].
-            * label (str, opcional): Etiqueta para la leyenda. Por defecto "Trajectory".
+            * label (str, opcional): Etiqueta para la leyenda. Por defecto "path".
             * color (str, opcional): Color de la línea. Por defecto 'blue'.
             * linestyle (str, opcional): Estilo de línea. Por defecto '-'.
             * marker (str, opcional): Marcador para los puntos. Por defecto None.
         """
         if self.dimension == 3:
-            self.ax.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2],
+            self.ax.plot(path[:, 0], path[:, 1], path[:, 2],
                          label=label,
                          color=color,
                          linestyle=linestyle,
                          marker=marker)
         else:
-            self.ax.plot(trajectory[:, 0], trajectory[:, 1],
+            self.ax.plot(path[:, 0], path[:, 1],
                          label=label,
                          color=color,
                          linestyle=linestyle,
                          marker=marker)
-        self.added_elements.append({'type': 'trajectory', 'label': label})
+        self.added_elements.append({'type': 'path', 'label': label})
 
     def add_cuboid(self, cuboid, label="Cuboid", color="red", alpha=0.2):
         """
@@ -197,21 +197,21 @@ class Plotter:
 
 if __name__ == '__main__':
     # --- Datos de ejemplo ---
-    trayectoria_2d = np.array([[1, 2], [2, 3], [3, 2], [4, 3]])
-    trayectoria_3d = np.array([[1, 2, 1], [2, 3, 2], [3, 2, 3], [4, 3, 4]])
+    path_2d = np.array([[1, 2], [2, 3], [3, 2], [4, 3]])
+    path_3d = np.array([[1, 2, 1], [2, 3, 2], [3, 2, 3], [4, 3, 4]])
 
     cuboide1 = Cuboid([0, 0, 0], [2, 2, 2])
     cuboide2 = Cuboid([3, 3, 3], [5, 5, 5])
 
     # --- Ejemplo de plot 2D ---
-    plotter_2d = Plotter(title="Trayectoria 2D", dimension=2)
-    plotter_2d.add_trajectory(trayectoria_2d, label="Trayectoria 2D", color='green', marker='o')
+    plotter_2d = Plotter(title="Path 2D", dimension=2)
+    plotter_2d.add_path(path_2d, label="Path 2D", color='green', marker='o')
     plotter_2d.customize_plot(xlabel="Eje X (2D)", ylabel="Eje Y (2D)", equal_aspect=True)
     plotter_2d.show_plot()
 
     # --- Ejemplo de plot 3D con trayectorias y cuboides ---
-    plotter_3d = Plotter(title="Trayectoria 3D y Cuboides", dimension=3)
-    plotter_3d.add_trajectory(trayectoria_3d, label="Trayectoria 3D", color='purple', linestyle='--', marker='^')
+    plotter_3d = Plotter(title="Path 3D y Cuboides", dimension=3)
+    plotter_3d.add_path(path_3d, label="Path 3D", color='purple', linestyle='--', marker='^')
     plotter_3d.add_cuboid(cuboide1, label="Cuboide 1", color='cyan', alpha=0.3)
     plotter_3d.add_cuboid(cuboide2, label="Cuboide 2", color='orange', alpha=0.3)
     plotter_3d.customize_plot(xlabel="Eje X", ylabel="Eje Y", zlabel="Eje Z", equal_aspect=True, legend=True)
@@ -219,6 +219,6 @@ if __name__ == '__main__':
 
     # --- Ejemplo de limpiar y reutilizar el mismo plotter 3D ---
     plotter_3d.clear_plot() # Limpiar el plot 3D
-    plotter_3d.add_trajectory(trayectoria_3d * 0.5, label="Trayectoria 3D Escala 0.5", color='red', linestyle='-.', marker='x') # Añadir nueva trayectoria
+    plotter_3d.add_path(path_3d * 0.5, label="Path 3D Escala 0.5", color='red', linestyle='-.', marker='x') # Añadir nueva trayectoria
     plotter_3d.customize_plot(title="Nueva Trayectoria en Plot 3D Limpio", legend=True) # Modificar titulo y leyenda
     plotter_3d.show_plot() # Mostrar el nuevo plot

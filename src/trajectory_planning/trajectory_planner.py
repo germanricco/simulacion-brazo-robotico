@@ -3,6 +3,7 @@ from typing import Callable, Optional
 from scipy.interpolate import CubicSpline
 import sys
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 # Importo modulos
 src_root = Path(__file__).resolve().parent.parent
@@ -51,7 +52,6 @@ class TrajectoryPlanner():
         # Separar por articulaciones y crear perfiles
         for joint_id in self.joints_constraints.keys():
             # Actualizo joint ID
-
             self._current_joint_ID = joint_id
             joint_positions = joints_path[:, joint_id]  # Toma una columna a la vez
             
@@ -101,7 +101,7 @@ class TrajectoryPlanner():
             q0, q1 = positions[i], positions[i+1]
             v0, v1 = estimated_velocities[i], estimated_velocities[i+1]
 
-            segment = self.generate_segment(q0, q1, v0, v1)
+            segment = self.generate_segment(q0, q1, v0, v1, constraints=constraints)
             segments.append(segment)
             
         return segments
@@ -152,6 +152,8 @@ class TrajectoryPlanner():
             )
             velocities[i] = np.clip(velocities[i], -max_vel, max_vel)
 
+        velocities[0] = 0
+        velocities[n-1] = 0
         return velocities
     
 
@@ -185,9 +187,8 @@ class TrajectoryPlanner():
                 Tj2 = profile._parameters[2],
                 Td = profile._parameters[3],
                 Tv = profile._parameters[4],
-                
+                # Funcion de trayectoria
                 trajectory_func= profile._trajectory_function
-
             )
 
         except ValueError as e:
@@ -214,11 +215,10 @@ class TrajectoryPlanner():
 if __name__ == "__main__":
     # Joints_path de prueba
     joints_path = np.array([
-        [0, 0],
-        [6, 4],
-        [10, 2],
-        [6, 6],
-        [0, 8]
+        [0],
+        [4],
+        [8],
+        [10]
     ])
 
     print(joints_path)
@@ -226,10 +226,33 @@ if __name__ == "__main__":
     # Configurar restricciones para 2 articulaciones
     joints_constraints = {
         0: JointConstraints(max_velocity=1, max_acceleration=1, max_jerk=3),
-        1: JointConstraints(max_velocity=1, max_acceleration=1, max_jerk=3)
+        #1: JointConstraints(max_velocity=1, max_acceleration=1, max_jerk=3)
     }
 
     planner = TrajectoryPlanner(joints_constraints)
     planner.process_joints_path(joints_path=joints_path)
 
+    print(f"\nArticulacion 0, Segmento 0")
+    print(planner.joint_profiles[0][0])
+    print(planner.joint_profiles[0][0].limit_velocity)
+    print(planner.joint_profiles[0][0].max_acceleration)
+    print(planner.joint_profiles[0][0].max_deceleration)
+    print(planner.joint_profiles[0][0].total_time)
+
+    print(f"Is Sampled: {planner.joint_profiles[0][0].is_sampled}")
+    # Se puede muestrear para graficar la trayectoria explicitamente
+    #planner.joint_profiles[0][0].sample_trajectory(sample_rate=0.01)
+    # O indirectamente por ej. pidiendo el perfil de posiciones
+    print(f"Position Profile")
+    print(planner.joint_profiles[0][0].position_profile)
+    plt.plot(planner.joint_profiles[0][0]._time_vector,planner.joint_profiles[0][0].position_profile)
+    plt.plot(planner.joint_profiles[0][0]._time_vector,planner.joint_profiles[0][0].velocity_profile)
+    plt.plot(planner.joint_profiles[0][0]._time_vector,planner.joint_profiles[0][0].acceleration_profile)
+    plt.show()
+    print(f"Is Sampled: {planner.joint_profiles[0][0].is_sampled}")
+
+    print(f"\nArticuclacion 0, Segmento 1")
+    print(planner.joint_profiles[0][1])
+    print(f" ")
+    print(planner.joint_profiles[0][2])
     print(planner.joint_profiles.keys)
