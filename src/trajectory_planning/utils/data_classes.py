@@ -2,7 +2,9 @@ import numpy as np
 from typing import Callable
 from dataclasses import dataclass
 
-
+ACCELERATION_ID = 0
+SPEED_ID = 1
+POSITION_ID = 2
 
 @dataclass
 class JointConstraints:
@@ -37,6 +39,7 @@ class SegmentProfile:
     # Metadata
     segment_id: int
     joint_id: int
+    profile_type: str
 
     # Parametros de S-Curve inmutables
     constraints: SegmentConstraints
@@ -61,11 +64,16 @@ class SegmentProfile:
     #duration: float
     #synchronized: bool = False
 
+    # En ScurveProfile y perfiles dinamicos
     @property
     def total_time(self) -> float:
         """Tiempo total del segmento"""
-        return self.Ta + self.Td + self.Tv
-    
+        if self.profile_type == "scurve":
+            return max(self.Ta + self.Td + self.Tv, 1e-9)  # Evitar division por cero
+        elif self.profile_type == "dwell":
+            return self.Tv
+        else:
+            raise ValueError("Tipo de perfil no soportado")
     @property
     def limit_velocity(self) -> float:
         """Velocidad máxima alcanzada en el segmento"""
@@ -102,10 +110,20 @@ class SegmentProfile:
         return self._sampled
 
     def sample_trajectory(self, sample_rate: float = 0.01) -> None:
-        """Pre-muestrea la trayectoria para acceso rápido"""
-        self._time_vector = np.arange(0, self.total_time, sample_rate)
-        self._position_profile = np.array([self.trajectory_func(t)[2] for t in self._time_vector])
-        self._velocity_profile = np.array([self.trajectory_func(t)[1] for t in self._time_vector])
-        self._acceleration_profile = np.array([self.trajectory_func(t)[0] for t in self._time_vector])
+        """Muestrea la trayectoria para acceso rápido"""
+        # Validacion
+        if sample_rate <= 0:
+            raise ValueError("La tasa de muestreo debe ser mayor a cero")
+        
+        if np.isnan(self.total_time) or self.total_time <= 0:
+            raise ValueError("El tiempo total del segmento debe ser mayor a cero")
+        
+       # Generar vector temporal con np.linspace (mejor precisión)
+        num_samples = int(np.ceil(self.total_time / sample_rate)) + 1
+        self._time_vector = np.linspace(0, self.total_time, num=num_samples)
+
+        self._position_profile = np.array([self.trajectory_func(t)[POSITION_ID] for t in self._time_vector])
+        self._velocity_profile = np.array([self.trajectory_func(t)[SPEED_ID] for t in self._time_vector])
+        self._acceleration_profile = np.array([self.trajectory_func(t)[ACCELERATION_ID] for t in self._time_vector])
 
         self._sampled = True

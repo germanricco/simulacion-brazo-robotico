@@ -5,22 +5,19 @@ https://github.com/nameofuser1/py-scurve/tree/master
 
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
+from typing import Callable
 import numpy as np
-
 import sys
 from pathlib import Path
-
 # Importo modulos
 src_root = Path(__file__).resolve().parent.parent
 print(src_root)
 sys.path.append(str(src_root))
-
 from trajectory_planning.utils.data_classes import JointConstraints
+from trajectory_planning.utils.data_classes import POSITION_ID
+from trajectory_planning.utils.data_classes import SPEED_ID
+from trajectory_planning.utils.data_classes import ACCELERATION_ID
 
-# CONSTANTES
-ACCELERATION_ID = 0
-SPEED_ID = 1
-POSITION_ID = 2
 
 OPTIMIZER_THRESHOLD = 0.01
 EPSILON = 0.0001
@@ -34,6 +31,8 @@ class TrajectoryProfile(ABC):
         self._constraints = constraints
         self._parameters = None
         self._trajectory_function = None
+        
+        self._inverted = False
 
     @property
     def constraints(self) -> JointConstraints:
@@ -68,7 +67,7 @@ class TrajectoryProfile(ABC):
             np.ndarray: [posición, velocidad, aceleración]
         """
         if not self._trajectory_function:
-            raise ValueError("Trayectoria no calculada")
+            raise ValueError("Primero debe calcularse la trayectoria con plan_trayectory()")
         return self._trajectory_function(t)
     
     #! Metodos internos
@@ -87,20 +86,26 @@ class SCurveProfile(TrajectoryProfile):
     """
     Implementacion del perfil S-Curve
     """
+
     def plan_trajectory(self, q0:float, q1:float, v0:float, v1:float):
         #! Agregar validacion de condiciones de borde q0,q1,v0,v1
         try:
+            #Transformacion de signos inicial
+            q0,q1,v0,v1 = self._sign_transforms(q0, q1, v0, v1)
+
             # Calculo de parametros caracteristicos
             self._parameters = self._compute_parameters(q0, q1, v0, v1)
             
-            # Generacion de funcion de trayectoria
+            # Creo la trayectoria en funcion del tiempo
             self._trajectory_function = self._get_trajectory_function(q0, q1, v0, v1)
 
         except Exception as e:
             raise ValueError(f"Error S-Curve: {str(e)}") from e
     
+
     def get_state(self, t):
         return super().get_state(t)
+
 
     def _scurve_check_possibility(self, q0, q1, v0, v1):
         """
@@ -134,6 +139,7 @@ class SCurveProfile(TrajectoryProfile):
         """
         Case 1. V_lim = V_max
         """
+        # Tomo variables internas
         v_max = self.constraints.max_velocity
         a_max = self.constraints.max_acceleration
         j_max = self.constraints.max_jerk
@@ -169,14 +175,11 @@ class SCurveProfile(TrajectoryProfile):
         return Tj1, Ta, Tj2, Td, Tv
 
 
-    def _compute_maximum_speed_not_reached(self, q0, q1, v0, v1, a_max):
+    def _compute_maximum_speed_not_reached(self, q0, q1, v0, v1, v_max, a_max, j_max):
         """
         Case 2. V_lim < V_max
         No esta presente el segmento de V-cte.
         """
-        v_max = self.constraints.max_velocity
-        j_max = self.constraints.max_jerk
-
         # Assuming that a_max/a_min is reached
         #Eq 3.26a
         Tj1 = Tj2 = Tj = a_max/j_max
@@ -213,9 +216,9 @@ class SCurveProfile(TrajectoryProfile):
 
         while iteration < max_iter and current_a_max > 1e-9:
             try:
-                # 1. Calcular parámetros base
+                # 1. Calcular parámetros base con velocidad maxima no alcanzada
                 Tj1, Ta, Tj2, Td, Tv = self._compute_maximum_speed_not_reached(
-                    q0, q1, v0, v1, current_a_max)
+                    q0, q1, v0, v1, v_max, current_a_max, j_max)
 
                 # 2. Manejar casos especiales inmediatamente
                 if Ta < 0 or Td < 0:
@@ -321,14 +324,16 @@ class SCurveProfile(TrajectoryProfile):
             raise TypeError("Trajectory is not feasible")
 
 
-    def _sign_transforms(self, q0, q1, v0, v1, v_max, a_max, j_max):
+    def _sign_transforms(self, q0, q1, v0, v1):
         """
         Transforma los signos para ser capaz de calcular la trayectoria con q1 < q0
 
         Look at 'Trajectory planning for automatic machines and robots(2008)'
         (pag. 90)
         """
-
+        v_max = self.constraints.max_velocity
+        a_max = self.constraints.max_acceleration
+        j_max = self.constraints.max_jerk
 
         # Asumimos simetria
         v_min = -v_max
@@ -336,6 +341,9 @@ class SCurveProfile(TrajectoryProfile):
         j_min = -j_max
 
         s = np.sign(q1-q0)
+        if s == -1:
+            self._inverted = True
+
         vs1 = (s+1)/2
         vs2 = (s-1)/2
 
@@ -344,25 +352,37 @@ class SCurveProfile(TrajectoryProfile):
         _q1 = s*q1
         _v0 = s*v0
         _v1 = s*v1
+        
         _v_max = vs1*v_max + vs2*v_min
         _a_max = vs1*a_max + vs2*a_min
         _j_max = vs1*j_max + vs2*j_min
 
-        return _q0, _q1, _v0, _v1, _v_max, _a_max, _j_max
+        # Actualizo restricciones
+        self.constraints.max_velocity = _v_max
+        self.constraints.max_acceleration = _a_max
+        self.constraints.max_jerk = _j_max
+
+        return _q0, _q1, _v0, _v1
 
 
     def _point_sign_transform(self, q0, q1, p):
         """
         Transforms point back to the original sign
         """
-        s = np.sign(q1-q0)
-        return s*p
+        # NOTA. Cuando q1<q0. En _sign_transforms se inviertieron los signos y q1>q0.
+        # Por ello en esta funcion se invierten los signos de nuevo.
+        if not self._inverted:
+            s = np.sign(q1-q0)
+            return s*p
+        else:
+            return -p
 
 
-    def _compute_trajectory(self, q0, q1, v0, v1, v_max, a_max, j_max):
+    def _compute_trajectory(self, q0, q1, v0, v1):
         """
         Calcula caracteristicas clave y crea  funcion trajectory = f(t)
         """
+        
         # Obtengo parametros almacenados en variables internas
         Tj1 = self._parameters[0]
         Ta = self._parameters[1]
@@ -370,17 +390,19 @@ class SCurveProfile(TrajectoryProfile):
         Td = self._parameters[3]
         Tv = self._parameters[4]
 
+        j_max = self.constraints.max_jerk
+
         # Calculo caracteristicas clave
         T = Ta + Td + Tv
         a_lim_a = j_max*Tj1
         a_lim_d = -j_max*Tj2
         v_lim = v0 + (Ta-Tj1)*a_lim_a
-
+        
         def trajectory(t):
-            """
-            Returns numpy array with shape (3,) which contains acceleration,
-                speed and position for a given time t
-            """
+            #
+            #Returns numpy array with shape (3,) which contains acceleration,
+            #    speed and position for a given time t
+            #
             # Acceleration phase
             if 0 <= t < Tj1:
                 a = j_max*t
@@ -443,30 +465,85 @@ class SCurveProfile(TrajectoryProfile):
             return point
 
         return trajectory
-
+    
 
     def _get_trajectory_function(self, q0, q1, v0, v1):
         """
         Retorna trayectoria en funcion del tiempo, modificando signos para casos en los que
         q1<q0
         """
-        # Obtengo restricciones originales
-        v_max = self._constraints.max_velocity
-        a_max = self._constraints.max_acceleration
-        j_max = self._constraints.max_jerk
+        # 1. Calcula la trayectoria en funcion del tiempo con los parametros
+        traj_func = self._compute_trajectory(q0, q1, v0, v1)
 
-        # 1. Modifica signos de argumentos
-        zipped_args = self._sign_transforms(q0, q1, v0, v1, v_max, a_max, j_max)
-
-        # 2. Calcula la trayectoria en funcion del tiempo con los parametros
-        traj_func = self._compute_trajectory(*zipped_args)
-
-        # 3. Modifica signos de puntos de la trayectoria
+        # 2. Modifica signos de puntos de la trayectoria
         def sign_back_transformed(t):
             return self._point_sign_transform(q0, q1, traj_func(t))
 
         # Retorna la trayectoria final
         return sign_back_transformed
+
+
+class ZeroMotionProfile(TrajectoryProfile):
+    """
+    Perfil de trayectoria para mantener una articulacion estatica durante un tiempo determinado
+
+    Genera una trayectoria de posicion constante y velocidades/aceleraciones nulas. Para
+    periodos de espera entre movmiientos o articulaciones inactivas durante un segmento.
+
+    Argumentos:
+        constraints (JointConstraints): Restricciones de la articulacion
+    """
+    def __init__(self, constraints: JointConstraints):
+        super().__init__(constraints)
+        self._duration = 0.0
+        self._trajectory_function = None
+
+    def plan_trajectory(self, q:float, duration:float):
+        """
+        Configura los parametros de la trayectoria estatica
+
+        Argumentos:
+            * q: Posicion a mantener
+            * duration: Tiempo de espera
+        """
+        # Verifico duracion y la guardo
+        if duration <= 0:
+            raise ValueError("La duración debe ser positiva")
+        self._duration = duration
+        print(f"Duracion de segmento estatico: {self._duration}")
+
+        # Calculo la trayectoria
+        self._trajectory_function = self._build_static_trajectory(q)
+    
+    def get_state(self, t):
+        return super().get_state(t)
+    
+    def _build_static_trajectory(self, q: float) -> Callable[[np.ndarray], np.ndarray]:
+        """
+        Construye una función de trayectoria vectorizada y compatible con el sistema
+        
+        Args:
+            q: Posición a mantener (constante)
+            
+        Returns:
+            Función que mapea array de tiempos a estados [posición, velocidad, aceleración]
+        """
+        def trajectory(t: np.ndarray) -> np.ndarray:
+            # Manejar tanto escalares como arrays
+            is_scalar = np.isscalar(t)
+            t_array = np.asarray([t]) if is_scalar else np.asarray(t)
+            
+            # Crear array de estados (N,3)
+            states = np.zeros((t_array.size, 3), dtype=np.float32)
+            states[:, POSITION_ID] = q  # q es constante
+            
+            # Retornar según tipo de entrada
+            return states[0] if is_scalar else states
+        
+        return trajectory
+
+
+
 
 
 if __name__ == "__main__":
@@ -487,8 +564,7 @@ if __name__ == "__main__":
     v0 = 1
     v1 = 0
     s_curve.plan_trajectory(q0, q1, v0, v1)
-    print(s_curve._parameters)
-
+    print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
     
     print(f"\n -- Example 3.10 --")
     print("Tested 'compute_max_speed_not_reached' \n")
@@ -497,8 +573,6 @@ if __name__ == "__main__":
                                            max_acceleration=10,
                                            max_jerk=30)
     s_curve.plan_trajectory(q0, q1, v0, v1)
-    # Muestro en pantalla
-    print(s_curve._parameters)
     print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
 
 
@@ -511,7 +585,6 @@ if __name__ == "__main__":
     v1 = 0
     s_curve.plan_trajectory(q0, q1, v0, v1)
     print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
-    print(f"Ultima Trayectoria:\n {s_curve._trajectory_function}")
 
 
     print(f"\n -- Example 3.12 --")
@@ -523,15 +596,10 @@ if __name__ == "__main__":
     s_curve.plan_trajectory(q0, q1, v0, v1)
     print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
 
-    print(f"Ultima Trayectoria:\n {s_curve._trajectory_function}")
-
-    my_trayectory = s_curve._trajectory_function
-    my_trayectory
 
     #! Leer Bibliografia para este ultimo caso. Esta MAL
     print(f"\n -- Example 3.13 --")
     print("")
-
     s_curve.constraints = JointConstraints(max_velocity=10,
                                            max_acceleration=20,
                                            max_jerk=30)
@@ -541,20 +609,41 @@ if __name__ == "__main__":
     v1 = 2
     s_curve.plan_trajectory(q0, q1, v0, v1)
     print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
-
     print(f"Ultima Trayectoria:\n {s_curve._trajectory_function}")
 
-    q0 = 0
-    q1 = 2
+
+    print(f"\n -- Test Propios --")
+    q0 = 2
+    q1 = 0
     v0 = 0
-    v1 = 1
+    v1 = 0
     s_curve.plan_trajectory(q0, q1, v0, v1)
     print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
 
     print(f"Ultima Trayectoria:\n {s_curve._trajectory_function}")
 
     # Para mostrar toda la trayectoria
-    #t = np.linspace(0,s_curve.characteristics.total_time, 100)
+    t = np.linspace(0,2, 50)
+    for t in t:
+        print(s_curve.get_state(t))
+
+
+    print(f"\n ------- Prueba de ZeroMotionProfile  -------\n")
+
+    joint_1_constraints = JointConstraints(max_velocity=5,
+                                           max_acceleration=10,
+                                           max_jerk=30)
+    
+    zero_motion = ZeroMotionProfile(constraints=joint_1_constraints)
+    q0 = 4
+    q1 = 4
+    v0 = 2
+    v1 = 2
+
+    zero_motion.plan_trajectory(q1, duration=5)
+
+
+    #t = np.linspace(0,zero_motion._duration, 100)
     #for t in t:
-    #    print(s_curve.get_state(t))
+    #    print(zero_motion.get_state(t))
 

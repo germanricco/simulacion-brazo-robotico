@@ -15,6 +15,7 @@ from trajectory_planning.utils.data_classes import SegmentProfile
 from trajectory_planning.utils.data_classes import SegmentConstraints
 from trajectory_planning.utils.data_classes import JointState
 from trajectory_planning.velocity_profiles import SCurveProfile
+from trajectory_planning.velocity_profiles import ZeroMotionProfile
 from trajectory_planning.polinomios import QuinticPolinomial
 
 class TrajectoryPlanner():
@@ -136,9 +137,8 @@ class TrajectoryPlanner():
             time_vector[i] = time_vector[i-1] + segment_times[i-1]
 
         # 3. Crear spline Quintic con condiciones de frontera C2
-        # Aceleracion=0 en bordes
+        #! Aceleracion = 0 en bordes
         cs = CubicSpline(time_vector, positions, bc_type=((2, 0), (2, 0)))
-        print(f"Coeficientes interpolados\n {cs}")
 
         # 4. Calcular velocidades en cada punto
         velocities = cs(time_vector, 1)  # Primera derivada
@@ -156,10 +156,40 @@ class TrajectoryPlanner():
         velocities[n-1] = 0
         return velocities
     
-
     def generate_segment(self, q0: float, q1: float, v0: float, v1: float, constraints: JointConstraints) -> SegmentProfile:
         """
-        
+        Crea un segmento de trayectoria entre dos puntos de paso.
+
+        Argumentos:
+            q0: Posicion inicial
+            q1: Posicion final
+            v0: Velocidad inicial
+            v1: Velocidad final
+            constraints: Restricciones de la articulacion
+
+        Retorna:
+            [SegmentProfile]: Perfil de segmento generado
+        """
+        EPSILON = 1e-6
+        dist = abs(q1 - q0)
+        if dist < EPSILON:
+            return self._create_dwell_segment(q0, constraints=constraints)
+        else:
+            return self._create_scurve_segment(q0, q1, v0, v1, constraints)
+
+    def _create_scurve_segment(self, q0:float, q1:float, v0:float, v1:float, constraints: JointConstraints) -> SegmentProfile:
+        """
+        Crea un segmento de trayectoria entre dos puntos de paso.
+
+        Argumentos:
+            q0: Posicion inicial
+            q1: Posicion final
+            v0: Velocidad inicial
+            v1: Velocidad final
+            constraints: Restricciones de la articulacion
+
+        Retorna:
+            [SegmentProfile]: Perfil de segmento generado
         """
         try:
             # Crear perfil de velocidad
@@ -171,6 +201,7 @@ class TrajectoryPlanner():
                 # MetaData
                 segment_id = self._current_segment_ID,
                 joint_id = self._current_joint_ID,
+                profile_type = "scurve",
                 # Restricciones del segmento
                 constraints=SegmentConstraints(
                     q_start=q0,
@@ -192,9 +223,51 @@ class TrajectoryPlanner():
             )
 
         except ValueError as e:
-            print(f"Error al generar segmento.")
+            print(f"Error al generar segmento de movimiento.")
 
+    def _create_dwell_segment(self, q0:float, constraints:JointConstraints,
+                              dwell_time:float=2) -> SegmentProfile:
+        """
+        Crea un segmento de trayectoria de espera (sin movimiento)
 
+        Argumentos:
+            q0: Posicion inicial
+            constraints: Restricciones de la articulacion
+
+        Retorna:
+            [SegmentProfile]: Perfil de segmento generado
+        """
+        try:
+            profile = ZeroMotionProfile(constraints=constraints)
+            profile.plan_trajectory(q0, duration=dwell_time)
+
+            return SegmentProfile(
+                    # MetaData
+                    segment_id = self._current_segment_ID,
+                    joint_id = self._current_joint_ID,
+                    profile_type = "dwell",
+                    # Restricciones del segmento
+                    constraints=SegmentConstraints(
+                        q_start=q0,
+                        q_end=q0,
+                        v_start=0,
+                        v_end=0,
+                        jerk_max=constraints.max_jerk,
+                        accel_max=constraints.max_acceleration,
+                        vel_max=constraints.max_velocity
+                    ),
+                    # Parametros temporales de trayectoria
+                    Tj1 = 0,
+                    Ta = 0,
+                    Tj2 = 0, 
+                    Td = 0,
+                    Tv = dwell_time, #! Tiempo de espera. V=cte=0
+                    # Funcion de trayectoria
+                    trajectory_func= profile._trajectory_function
+                )
+        except ValueError as e:
+            print(f"Error al generar segmento estatico.")
+        
 
     def _calculate_segment_time(self, delta_q: float, constraints: JointConstraints) -> float:
         """Calcula tiempo mínimo para un segmento usando ecuaciones S-Curve"""
@@ -213,15 +286,18 @@ class TrajectoryPlanner():
         return max(t_trap, t_scurve)
 
 if __name__ == "__main__":
+    from visualization.trajectory_plotter import TrajectoryPlotter
+
     # Joints_path de prueba
     joints_path = np.array([
         [0],
+        [2],
         [4],
-        [8],
-        [10]
+        [3],
+        [6],
+        [4],
+        [0]
     ])
-
-    print(joints_path)
 
     # Configurar restricciones para 2 articulaciones
     joints_constraints = {
@@ -229,30 +305,13 @@ if __name__ == "__main__":
         #1: JointConstraints(max_velocity=1, max_acceleration=1, max_jerk=3)
     }
 
+    plotter = TrajectoryPlotter()
+
     planner = TrajectoryPlanner(joints_constraints)
     planner.process_joints_path(joints_path=joints_path)
 
-    print(f"\nArticulacion 0, Segmento 0")
-    print(planner.joint_profiles[0][0])
-    print(planner.joint_profiles[0][0].limit_velocity)
-    print(planner.joint_profiles[0][0].max_acceleration)
-    print(planner.joint_profiles[0][0].max_deceleration)
-    print(planner.joint_profiles[0][0].total_time)
+    plotter.add_joint_trajectory(0, planner.joint_profiles[0])
 
-    print(f"Is Sampled: {planner.joint_profiles[0][0].is_sampled}")
-    # Se puede muestrear para graficar la trayectoria explicitamente
-    #planner.joint_profiles[0][0].sample_trajectory(sample_rate=0.01)
-    # O indirectamente por ej. pidiendo el perfil de posiciones
-    print(f"Position Profile")
-    print(planner.joint_profiles[0][0].position_profile)
-    plt.plot(planner.joint_profiles[0][0]._time_vector,planner.joint_profiles[0][0].position_profile)
-    plt.plot(planner.joint_profiles[0][0]._time_vector,planner.joint_profiles[0][0].velocity_profile)
-    plt.plot(planner.joint_profiles[0][0]._time_vector,planner.joint_profiles[0][0].acceleration_profile)
-    plt.show()
-    print(f"Is Sampled: {planner.joint_profiles[0][0].is_sampled}")
+    plotter.plot(0)
 
-    print(f"\nArticuclacion 0, Segmento 1")
-    print(planner.joint_profiles[0][1])
-    print(f" ")
-    print(planner.joint_profiles[0][2])
-    print(planner.joint_profiles.keys)
+    plotter.show()
