@@ -121,37 +121,71 @@ class TrajectoryPlanner():
         if n < 2:
             return np.zeros_like(positions)
         
-        segment_times = []
-
+        # 1. Deteccion de segmentos constantes (q-i = q-i+1)
+        is_constant_segment = np.zeros(n-1, dtype=bool)
         for i in range(n-1):
-            # Calcular longitud acumulada de segmento
-            delta_q = abs(positions[i+1] - positions[i])
-            # Calcular tiempo teorico (sin considerar jerk) de segmento
-            t = self._calculate_segment_time(delta_q, constraints)
-            segment_times.append(t)
+            if np.isclose(positions[i], positions[i+1], atol=1e-6):
+                is_constant_segment[i] = True
 
-        # 2. Generar vector temporal acumulado
+        segment_times = []
+        MIN_CONSTANT_TIME = 1e-3
+
+        # 2. Estimar el tiempo necesario para recorrer el segmento
+        for i in range(n-1):
+            if is_constant_segment[i]:
+                # Tiempo mínimo para segmentos constantes
+                segment_times.append(MIN_CONSTANT_TIME)
+            else:
+                # Estimacion de tiempo para segmentos no constantes
+                delta_q = abs(positions[i+1] - positions[i])
+                t = self._calculate_segment_time(delta_q, constraints)
+                segment_times.append(t)
+
+        # 3. Generar vector temporal acumulado
         time_vector = np.zeros(n)
         for i in range(1, n):
             # Agrego tiempo anterior mas tiempo de nuevo
             time_vector[i] = time_vector[i-1] + segment_times[i-1]
 
-        # 3. Crear spline Quintic con condiciones de frontera C2
-        #! Aceleracion = 0 en bordes
-        cs = CubicSpline(time_vector, positions, bc_type=((2, 0), (2, 0)))
+        # 4. Generacion de spline con nodos multiples para constantes
+        cs_positions = positions.copy()
+        # Forzar continuidad C2 en segmentos constantes
+        for i in range(1, n-1):
+            if is_constant_segment[i-1] or is_constant_segment[i]:
+                cs_positions[i] = positions[i]  # Mantener posición exacta
 
-        # 4. Calcular velocidades en cada punto
+        try:
+            cs = CubicSpline(time_vector,
+                             cs_positions,
+                             bc_type=((2, 0), (2, 0))) # Aceleracion 0 en extremos
+        except ValueError:
+            return np.zeros_like(positions)
+
+        # 5. Calcular velocidades en cada punto
         velocities = cs(time_vector, 1)  # Primera derivada
-        velocities = np.clip(velocities, -constraints.max_velocity, constraints.max_velocity)
+        # Restringir velocidades
+        velocities = np.clip(velocities,
+                             -constraints.max_velocity,
+                             constraints.max_velocity)
 
-        for i in range(1, n):
-            delta_q = abs(positions[i] - positions[i-1])
-            max_vel = min(
-                np.sqrt(2 * constraints.max_acceleration * delta_q),
-                constraints.max_velocity
-            )
-            velocities[i] = np.clip(velocities[i], -max_vel, max_vel)
+        # Forzar velocidad cero en segmentos constantes
+        for i in range(n):
+            # Verificar si es punto interior de segmento constante
+            if (i > 0 and is_constant_segment[i-1]) or \
+            (i < n-1 and is_constant_segment[i]):
+                velocities[i] = 0.0
 
+        # Aplicar restricciones de aceleración máxima
+        for i in range(1, n-1):
+            if not (is_constant_segment[i-1] or is_constant_segment[i]):
+                delta_q = abs(positions[i+1] - positions[i])
+                max_vel = min(
+                    np.sqrt(2 * constraints.max_acceleration * delta_q),
+                    constraints.max_velocity
+                )
+                velocities[i] = np.clip(velocities[i], -max_vel, max_vel)
+
+        # Garantizar condiciones de frontera
         velocities[0] = 0
         velocities[n-1] = 0
         return velocities
@@ -176,6 +210,7 @@ class TrajectoryPlanner():
             return self._create_dwell_segment(q0, constraints=constraints)
         else:
             return self._create_scurve_segment(q0, q1, v0, v1, constraints)
+
 
     def _create_scurve_segment(self, q0:float, q1:float, v0:float, v1:float, constraints: JointConstraints) -> SegmentProfile:
         """
@@ -224,6 +259,7 @@ class TrajectoryPlanner():
 
         except ValueError as e:
             print(f"Error al generar segmento de movimiento.")
+
 
     def _create_dwell_segment(self, q0:float, constraints:JointConstraints,
                               dwell_time:float=2) -> SegmentProfile:
@@ -291,11 +327,9 @@ if __name__ == "__main__":
     # Joints_path de prueba
     joints_path = np.array([
         [0],
-        [2],
-        [4],
-        [3],
-        [6],
-        [4],
+        [1],
+        [1],
+        [0.5],
         [0]
     ])
 

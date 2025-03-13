@@ -15,6 +15,7 @@ print(src_root)
 sys.path.append(str(src_root))
 
 from src.trajectory_planning.velocity_profiles import SCurveProfile
+from src.trajectory_planning.velocity_profiles import ZeroMotionProfile
 from src.trajectory_planning.utils.data_classes import JointConstraints
 
 class TestSCurveProfile(unittest.TestCase):
@@ -377,6 +378,44 @@ class TestSCurveProfile(unittest.TestCase):
                         f"La duración calculada no coincide. Esperada: {expected_duration}, Obtenida: {actual_duration}")
         
         # De lo contrario, este test sirve como documentación
+
+
+
+class TestZeroMotionProfile(unittest.TestCase):
+    """
+    #Valida implementacion
+    """
+    def setUp(self):
+        """
+        Configura el entorno de pruebas
+        """
+        self.default_constraints = JointConstraints(
+            max_velocity=5.0,
+            max_acceleration=10.0,
+            max_jerk=30.0
+        )
+
+        # Instancia de ZeroMotionProfile
+        self.zero_motion = ZeroMotionProfile(constraints=self.default_constraints)
+        
+        # Tolerancia para comparaciones
+        self.float_tolerance = 1e-6
+
+    def test_trajectory_duration(self):
+        """
+        Test para verificar la duración total de la trayectoria.
+        """
+        q0, q1 = 4.0, 4.0
+        v0, v1 = 0.0, 0.0
+
+        self.zero_motion.plan_trajectory(q=q0, duration=4)
+
+        expected_duration = 4
+        
+        # Si la clase tiene un método para obtener la duración, verificarlo
+        actual_duration = self.zero_motion.duration()
+        self.assertTrue(isclose(actual_duration, expected_duration, abs_tol=self.float_tolerance),
+                        f"La duración calculada no coincide. Esperada: {expected_duration}, Obtenida: {actual_duration}")
 
 
 if __name__ == '__main__':

@@ -364,8 +364,7 @@ class SCurveProfile(TrajectoryProfile):
             return np.asarray([Tj1, Ta, Tj2, Td, Tv], dtype=np.float32)
 
         else:
-            print(f"Error al calcular parametros. S-Curve")
-            raise TypeError("Trajectory is not feasible")
+            raise TypeError("Error. compute_parameters(). Trajectory is not feasible")
 
 
     def _sign_transforms(self, q0, q1, v0, v1):
@@ -551,6 +550,9 @@ class ZeroMotionProfile(TrajectoryProfile):
         super().__init__(constraints)
         self._duration = 0.0
         self._trajectory_function = None
+
+    def duration(self) -> float:
+        return self._duration
 
     def plan_trajectory(self, q:float, duration:float):
         """
