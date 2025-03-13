@@ -29,10 +29,15 @@ class TrajectoryProfile(ABC):
     """
     def __init__(self, constraints: JointConstraints):
         self._constraints = constraints
-        self._parameters = None
+        self._parameters: np.ndarray = None
         self._trajectory_function = None
-        
+        self._duration = 0.0
         self._inverted = False
+
+    @property
+    @abstractmethod
+    def duration(self) -> float:
+        pass
 
     @property
     def constraints(self) -> JointConstraints:
@@ -43,6 +48,7 @@ class TrajectoryProfile(ABC):
         self._validate_constraints(value)
         self._constraints = value
         self._clear_parameters()
+
 
     @abstractmethod
     def plan_trajectory(self, q0, q1, v0, v1):
@@ -86,6 +92,14 @@ class SCurveProfile(TrajectoryProfile):
     """
     Implementacion del perfil S-Curve
     """
+    def __init__(self, constraints: JointConstraints):
+        super().__init__(constraints)
+        self._v_limit = 0.0
+        self._a_limit_accel = 0.0
+        self._a_limit_decel = 0.0
+    
+    def duration(self) -> float:
+        return self._duration
 
     def plan_trajectory(self, q0:float, q1:float, v0:float, v1:float):
         #! Agregar validacion de condiciones de borde q0,q1,v0,v1
@@ -144,35 +158,66 @@ class SCurveProfile(TrajectoryProfile):
         a_max = self.constraints.max_acceleration
         j_max = self.constraints.max_jerk
 
-        #Eq 3.19  Acceleration period
-        if (v_max-v0)*j_max < a_max**2:
-            #Eq 3.21 a_max is not reached
-            Tj1 = np.sqrt((v_max-v0)/j_max)
-            Ta = 2*Tj1
+        #! Caso especial, mas simple calcular parametros
+        if (v0 == 0 and v1 == 0):
+            # Asumo que se alcanza v_max
+            # Verifica si a_max se alcanza o no y calcula parametros
+            if v_max*j_max >= a_max**2:
+                Tj = a_max/j_max
+                Ta = Tj + (v_max/a_max)
+            else:
+                Tj = np.sqrt(v_max/j_max)
+                Ta = 2*Tj
+            
+            Tv = (q1-q0)/v_max - Ta
+
+            # No se alcanza v_max
+            # Se podria pasar a otro metodo pero existe una forma cerrada
+            if Tv<0:
+                Tv=0
+                if (q1-q0) >= 2*(a_max**3)/(j_max**2):
+                    Tj = a_max/j_max
+                    Ta = Tj/2 + np.sqrt((Tj/2)**2 + (q1-q0)/a_max)
+                else:
+                    Tj = np.cbrt((q1-q0)/(2*j_max))
+                    Ta = 2*Tj
+            
+            #Nota. Ta=Td | Tj1=Tj2=Tj
+            return Tj, Ta, Tj, Ta, Tv
+
+        #! Caso general, velocidades iniciales y finales distintas
         else:
-            #Eq 3.22 a_max is reached
-            Tj1 = a_max/j_max
-            Ta = Tj1 + (v_max-v0)/a_max
+            #Eq 3.19  Acceleration period
+            #Verificar si se alcanza a_max
+            if (v_max-v0)*j_max < a_max**2:
+                #Eq 3.21 a_max is not reached
+                Tj1 = np.sqrt((v_max-v0)/j_max)
+                Ta = 2*Tj1
+            else:
+                #Eq 3.22 a_max is reached
+                Tj1 = a_max/j_max
+                Ta = Tj1 + (v_max-v0)/a_max
 
-        #Eq 3.20 Deceleration period
-        if (v_max-v1)*j_max < a_max**2:
-            # Eq. 3.23 a_min is not reached
-            Tj2 = np.sqrt((v_max-v1)/j_max)
-            Td = 2*Tj2
-        else:
-            #Eq 3.24 a_min is reached
-            Tj2 = a_max/j_max
-            Td = Tj2 + (v_max-v1)/a_max
+            #Eq 3.20 Deceleration period
+            #Verificar si se alcanza a_min
+            if (v_max-v1)*j_max < a_max**2:
+                # Eq. 3.23 a_min is not reached
+                Tj2 = np.sqrt((v_max-v1)/j_max)
+                Td = 2*Tj2
+            else:
+                #Eq 3.24 a_min is reached
+                Tj2 = a_max/j_max
+                Td = Tj2 + (v_max-v1)/a_max
 
-        # Determino duracion de segmento de V=cte.
-        #Eq 3.25
-        Tv = (q1-q0)/v_max - (Ta/2)*(1+v0/v_max)-(Td/2)*(1+v1/v_max)
+            # Determino duracion de segmento de V=cte.
+            #Eq 3.25
+            Tv = (q1-q0)/v_max - (Ta/2)*(1+v0/v_max)-(Td/2)*(1+v1/v_max)
 
-        # Si Tv < 0 -> V_lim < V_max y debemos pasar a caso 2.
-        if Tv < 0:
-            raise ValueError("Maximum velocity is not reached")
+            # Si Tv < 0 -> V_lim < V_max y debemos pasar a caso 2.
+            if Tv < 0:
+                raise ValueError("V_lim < V_max")
 
-        return Tj1, Ta, Tj2, Td, Tv
+            return Tj1, Ta, Tj2, Td, Tv
 
 
     def _compute_maximum_speed_not_reached(self, q0, q1, v0, v1, v_max, a_max, j_max):
@@ -233,7 +278,6 @@ class SCurveProfile(TrajectoryProfile):
                 if T is not None and abs(T - (Ta + Td + Tv)) > dt_thresh:
                     raise ValueError("Ajuste temporal necesario")
 
-                print(f"Solución encontrada con a_max = {current_a_max:.4f}")
                 return Tj1, Ta, Tj2, Td, Tv
 
             except ValueError as e:
@@ -396,7 +440,17 @@ class SCurveProfile(TrajectoryProfile):
         T = Ta + Td + Tv
         a_lim_a = j_max*Tj1
         a_lim_d = -j_max*Tj2
-        v_lim = v0 + (Ta-Tj1)*a_lim_a
+
+        if v0 != v1:
+            v_lim = v0 + (Ta-Tj1)*a_lim_a
+        else:
+            v_lim = (Ta-Tj1)*a_lim_a
+
+        # Actualizo variables internas
+        self._duration = T
+        self._v_limit = v_lim
+        self._a_limit_accel = a_lim_a
+        self._a_limit_decel = a_lim_d
         
         def trajectory(t):
             #
@@ -543,107 +597,4 @@ class ZeroMotionProfile(TrajectoryProfile):
         return trajectory
 
 
-
-
-
-if __name__ == "__main__":
-
-    # Creo restricciones para 1 articulacion
-    joint_1_constraints = JointConstraints(max_velocity=5,
-                                           max_acceleration=10,
-                                           max_jerk=30)
-
-    s_curve = SCurveProfile(constraints=joint_1_constraints)
-
-    print(f"\n TEST CALCULO DE PARAMETROS\n")
-
-    print(f"-- Example 3.9 --")
-    print("Tested 'compute_max_speed_reached' \n")
-    q0 = 0
-    q1 = 10
-    v0 = 1
-    v1 = 0
-    s_curve.plan_trajectory(q0, q1, v0, v1)
-    print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
-    
-    print(f"\n -- Example 3.10 --")
-    print("Tested 'compute_max_speed_not_reached' \n")
-    # Actualizo restricciones cinematicas
-    s_curve.constraints = JointConstraints(max_velocity=10,
-                                           max_acceleration=10,
-                                           max_jerk=30)
-    s_curve.plan_trajectory(q0, q1, v0, v1)
-    print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
-
-
-    print(f"\n -- Example 3.11 --")
-    print("Tested 'max_acceleration_not_reached' \n")
-    # Mismas restricciones pero cambio condiciones de borde
-    q0 = 0
-    q1 = 10
-    v0 = 7
-    v1 = 0
-    s_curve.plan_trajectory(q0, q1, v0, v1)
-    print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
-
-
-    print(f"\n -- Example 3.12 --")
-    print("Tested 'max_acceleration_not_reached and Special Case 1 (Ta<0)' \n")
-    q0 = 0
-    q1 = 10
-    v0 = 7.5
-    v1 = 0
-    s_curve.plan_trajectory(q0, q1, v0, v1)
-    print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
-
-
-    #! Leer Bibliografia para este ultimo caso. Esta MAL
-    print(f"\n -- Example 3.13 --")
-    print("")
-    s_curve.constraints = JointConstraints(max_velocity=10,
-                                           max_acceleration=20,
-                                           max_jerk=30)
-    q0 = 0
-    q1 = 10
-    v0 = 0
-    v1 = 2
-    s_curve.plan_trajectory(q0, q1, v0, v1)
-    print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
-    print(f"Ultima Trayectoria:\n {s_curve._trajectory_function}")
-
-
-    print(f"\n -- Test Propios --")
-    q0 = 2
-    q1 = 0
-    v0 = 0
-    v1 = 0
-    s_curve.plan_trajectory(q0, q1, v0, v1)
-    print(f"Ta={s_curve._parameters[1]}, Tv={s_curve._parameters[4]}, Td={s_curve._parameters[3]}, Tj1={s_curve._parameters[0]}, Tj2={s_curve._parameters[2]} ")
-
-    print(f"Ultima Trayectoria:\n {s_curve._trajectory_function}")
-
-    # Para mostrar toda la trayectoria
-    t = np.linspace(0,2, 50)
-    for t in t:
-        print(s_curve.get_state(t))
-
-
-    print(f"\n ------- Prueba de ZeroMotionProfile  -------\n")
-
-    joint_1_constraints = JointConstraints(max_velocity=5,
-                                           max_acceleration=10,
-                                           max_jerk=30)
-    
-    zero_motion = ZeroMotionProfile(constraints=joint_1_constraints)
-    q0 = 4
-    q1 = 4
-    v0 = 2
-    v1 = 2
-
-    zero_motion.plan_trajectory(q1, duration=5)
-
-
-    #t = np.linspace(0,zero_motion._duration, 100)
-    #for t in t:
-    #    print(zero_motion.get_state(t))
 
