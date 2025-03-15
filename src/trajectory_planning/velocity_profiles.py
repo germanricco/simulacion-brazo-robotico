@@ -112,14 +112,11 @@ class SCurveProfile(TrajectoryProfile):
             
             # Creo la trayectoria en funcion del tiempo
             self._trajectory_function = self._get_trajectory_function(q0, q1, v0, v1)
-
         except Exception as e:
             raise ValueError(f"Error S-Curve: {str(e)}") from e
     
-
     def get_state(self, t):
         return super().get_state(t)
-
 
     def _scurve_check_possibility(self, q0, q1, v0, v1):
         """
@@ -147,7 +144,6 @@ class SCurveProfile(TrajectoryProfile):
             return dq > Tj*(v0+v1)
         else:
             raise ValueError("Something went wrong")
-
 
     def _compute_maximum_speed_reached(self, q0, q1, v0, v1):
         """
@@ -219,7 +215,6 @@ class SCurveProfile(TrajectoryProfile):
 
             return Tj1, Ta, Tj2, Td, Tv
 
-
     def _compute_maximum_speed_not_reached(self, q0, q1, v0, v1, v_max, a_max, j_max):
         """
         Case 2. V_lim < V_max
@@ -245,7 +240,6 @@ class SCurveProfile(TrajectoryProfile):
 
         return Tj1, Ta, Tj2, Td, Tv
     
-
     def _scurve_search_planning(self, q0, q1, v0, v1,
                                 l=0.99, max_iter=500,  dt_thresh=0.01, T=None):
         """
@@ -290,8 +284,7 @@ class SCurveProfile(TrajectoryProfile):
             return self._handle_special_cases(q0, q1, v0, v1, 0, 0, 0, 0, 0)
         except ValueError:
             raise ValueError(f"No se encontró solución en {iteration} iteraciones. Último a_max: {current_a_max:.4e}")
-            
-        
+             
     def _handle_special_cases(self, q0, q1, v0, v1, Tj1, Ta, Tj2, Td, Tv):
         """
         Maneja casos donde Ta o Td son negativos, es decir cuando solo se necesita 1 fase
@@ -332,7 +325,6 @@ class SCurveProfile(TrajectoryProfile):
 
         raise ValueError("Caso especial no manejable")
     
-
     def _compute_parameters(self, q0, q1, v0, v1):
         """
         Calcula los parametros de la trajectorya s-curve.
@@ -365,7 +357,6 @@ class SCurveProfile(TrajectoryProfile):
 
         else:
             raise TypeError("Error. compute_parameters(). Trajectory is not feasible")
-
 
     def _sign_transforms(self, q0, q1, v0, v1):
         """
@@ -407,7 +398,6 @@ class SCurveProfile(TrajectoryProfile):
 
         return _q0, _q1, _v0, _v1
 
-
     def _point_sign_transform(self, q0, q1, p):
         """
         Transforms point back to the original sign
@@ -419,7 +409,6 @@ class SCurveProfile(TrajectoryProfile):
             return s*p
         else:
             return -p
-
 
     def _compute_trajectory(self, q0, q1, v0, v1):
         """
@@ -519,7 +508,6 @@ class SCurveProfile(TrajectoryProfile):
 
         return trajectory
     
-
     def _get_trajectory_function(self, q0, q1, v0, v1):
         """
         Retorna trayectoria en funcion del tiempo, modificando signos para casos en los que
