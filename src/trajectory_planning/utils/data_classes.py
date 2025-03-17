@@ -72,6 +72,8 @@ class SegmentProfile:
             return max(self.Ta + self.Td + self.Tv, 1e-9)  # Evitar division por cero
         elif self.profile_type == "dwell":
             return self.Tv
+        elif self.profile_type == "constant_velocity":
+            return self.Tv
         else:
             raise ValueError("Tipo de perfil no soportado")
     @property

@@ -327,15 +327,28 @@ class SCurveProfile(TrajectoryProfile):
     
     def _compute_parameters(self, q0, q1, v0, v1):
         """
-        Calcula los parametros de la trajectorya s-curve.
-            Tj1     --- non-zero constant jerk period while accelerating
-            Ta      --- total acceleration period time
-            Tj2     --- non-zero constant jerk period while decelerating
-            Td      --- total deceleration time
-            Tv      --- constant speed time
+        Calcula los parametros de la trajectoria s-curve.
 
+        Determina los parametros temporales optimos para un perfil de velocidad
+        S-Curve basado en posiciones y velocidades iniciales y finales, considerando
+        restricciones cinematicas de la articulacion
+
+        Parametros:
+            * q0: Posicion inicial
+            * q1: Posicion final
+            * v0: Velocidad inicial
+            * v1: Velocidad final
+            
         Retorna:
-            * np.array: lista con parametros ([Tj1, Ta, Tj2, Td, Tv])
+            * np.array: lista con parametros ([Tj1, Ta, Tj2, Td, Tv]) donde:
+                - Tj1: non-zero constant jerk period while accelerating
+                - Ta: total acceleration period time
+                - Tj2: non-zero constant jerk period while decelerating
+                - Td: total deceleration time
+                - Tv: constant speed time
+
+        Raises:
+            TypeError: si la trayectoria no es posible.
         """
         # Si la trayectoria es posible
         if self._scurve_check_possibility(q0, q1, v0, v1):
@@ -524,12 +537,124 @@ class SCurveProfile(TrajectoryProfile):
         return sign_back_transformed
 
 
+class ConstantVelocityProfile(TrajectoryProfile):
+    """
+    Perfil de trayectoria con velocidad constante para movimientos lineales
+
+    Este perfil es optimo para segmentos donde se requiere una velocidad uniforme.
+    """
+    def __init__(self, constraints: JointConstraints):
+        """
+        Inicializa el perfil con las restricciones cinematicas de la articulacion
+
+        Argumentos:
+            constraints (JointConstraints): Restricciones de la articulacion
+        """
+        super().__init__(constraints)
+        self._duration = 0.0
+        self._trajectory_function = None
+
+    def duration(self) -> float:
+        """Retorna duracion calculada para este segmento de trayectoria"""
+        return self._duration
+    
+    def plan_trajectory(self, q0:float, q1:float, v:float):
+        """
+        Configura los parametros de la trayectoria de v=cte y actualiza variable
+        interna self._trajectory_function
+
+        Argumentos:
+            * q0: Posicion inicial
+            * q1: Posicion final
+            * v: Velocidad constante
+
+        Raises:
+            ValueError: Si la velocidad excede los limites o tiene direccion incorrecta
+        """
+        desplazamiento = q1-q0
+        direction = 1.0 if desplazamiento >= 0 else -1.0
+
+        # Verifico que signo de desplazamiento y velocidad sean iguales
+        if (v * direction) <= 0:
+            raise ValueError(f"La velocidad ({v}) debe tener el mismo signo que el desplazamiento ({desplazamiento})")
+        
+        max_vel = self.constraints.max_velocity
+
+        # Verifico velocidad y restringo a limites (restricciones)
+        if abs(v) > max_vel:
+            v = direction * max_vel
+            print(f"Advertencia: Velocidad ajustada a {v} para cumplir con el límite máximo")
+        
+        # Verifico que la velocidad no sea igual a 0
+        if abs(v) < 1e-6:
+            raise ValueError("La velocidad no puede ser cero en un perfil de velocidad constante")
+        
+        # Calculo duracion y actualizo variable interna
+        self._duration = abs(desplazamiento/v)
+
+        # Construir la función de trayectoria
+        self._trajectory_function = self._build_constant_vel_trajectory(q0, q1, v)
+            
+    def get_state(self, t):
+        return super().get_state(t)
+
+    def _build_constant_vel_trajectory(self, q0:float, q1:float, v:float) -> Callable[[np.ndarray], np.ndarray]:
+        """
+        Construye una función de trayectoria vectorizada para velocidad constante.
+        
+        Esta función crea un mapping de tiempos a estados [posición, velocidad, aceleración]
+        donde la velocidad es constante y la aceleración es cero en todo momento.
+        
+        Args:
+            q0: Posición inicial
+            q1: Posición final
+            v: Velocidad constante
+            
+        Returns:
+            Función que mapea array de tiempos a estados [posición, velocidad, aceleración]
+        """
+        duration = self._duration
+
+        def trajectory(t: np.ndarray) -> np.ndarray:
+            # Manejar tanto escalares como arrays
+            is_scalar = np.isscalar(t)
+            t_array = np.asarray([t]) if is_scalar else np.asarray(t)
+            
+            # Inicializar array de estados (N,3)
+            states = np.zeros((t_array.size, 3), dtype=np.float32)
+            
+            # Aplicar saturación de tiempo
+            t_saturated = np.clip(t_array, 0, duration)
+            
+            # Calcular posiciones a lo largo del tiempo
+            # p(t) = q0 + v*t
+            states[:, POSITION_ID] = q0 + v * t_saturated
+            
+            # Corregir la posición final para evitar errores numéricos
+            final_mask = (t_array >= duration)
+            states[final_mask, POSITION_ID] = q1
+            
+            # Asignar velocidad constante (excepto en los extremos del segmento)
+            # v(t) = v para 0 < t < duration, 0 en otro caso
+            in_range_mask = (0 <= t_array) & (t_array <= duration)
+            states[in_range_mask, SPEED_ID] = v
+            
+            # La aceleración es siempre cero
+            # a(t) = 0
+            states[:, ACCELERATION_ID] = 0.0
+            
+            # Retornar según tipo de entrada
+            return states[0] if is_scalar else states
+        
+        return trajectory
+        
+
 class ZeroMotionProfile(TrajectoryProfile):
     """
     Perfil de trayectoria para mantener una articulacion estatica durante un tiempo determinado
 
     Genera una trayectoria de posicion constante y velocidades/aceleraciones nulas. Para
-    periodos de espera entre movmiientos o articulaciones inactivas durante un segmento.
+    periodos de espera entre movimientos o articulaciones inactivas durante un segmento.
 
     Argumentos:
         constraints (JointConstraints): Restricciones de la articulacion
